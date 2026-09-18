@@ -1,0 +1,37 @@
+{
+  "name": "gvhidra-vscode",
+  "displayName": "GVHidra for VSCode",
+  "icon": "assets/icons/logo256px.png",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./out/gvhidra-vscode.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gvhidra-vscode",
+          "title": "GVHidra",
+          "icon": "assets/icons/favicon24px_dark_theme.svg"
+        }
+      ]
+    },
+    "views": {
+      "gvhidra-vscode": [
+        {
+          "id": "gvhidra-vscode.main",
+          "name": "GVHidra"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.100.0",
+    "typescript": "^5.0.0"
+  }
+}
