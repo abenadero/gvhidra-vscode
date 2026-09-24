@@ -1,39 +1,15 @@
 import * as vscode from 'vscode';
+import { GvhidraWebviewProvider } from './webview/GvhidraWebviewProvider';
 
-export function activate(context: vscode.ExtensionContext) {
-    const provider = new MenuProvider();
+export function activate(context: vscode.ExtensionContext): void {
+    const provider = new GvhidraWebviewProvider(context);
 
     context.subscriptions.push(
-        vscode.window.registerTreeDataProvider(
-            'gvhidra-vscode.main',
+        vscode.window.registerWebviewViewProvider(
+            GvhidraWebviewProvider.viewType,
             provider
         )
     );
 }
 
-export function deactivate() {}
-
-class MenuProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(): vscode.TreeItem[] {
-        const description = new vscode.TreeItem(
-            'Este es un texto descriptivo.'
-        );
-
-        const button1 = new vscode.TreeItem(
-            'Botón 1',
-            vscode.TreeItemCollapsibleState.None
-        );
-
-        const button2 = new vscode.TreeItem(
-            'Botón 2',
-            vscode.TreeItemCollapsibleState.None
-        );
-
-        return [description, button1, button2];
-    }
-}
+export function deactivate(): void {}

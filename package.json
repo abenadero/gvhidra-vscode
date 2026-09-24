@@ -14,7 +14,7 @@
         {
           "id": "gvhidra-vscode",
           "title": "GVHidra",
-          "icon": "assets/icons/favicon24px_dark_theme.svg"
+          "icon": "assets/icons/gvHIDRA-icon-solid-monochrome-64px.svg"
         }
       ]
     },
@@ -22,9 +22,25 @@
       "gvhidra-vscode": [
         {
           "id": "gvhidra-vscode.main",
-          "name": "GVHidra"
+          "name": "GVHidra",
+          "type": "webview"
         }
       ]
+    },
+    "configuration": {
+      "title": "GVHidra",
+      "properties": {
+        "gvhidra.documentation.manualUrl": {
+          "type": "string",
+          "default": "https://example.com/manual",
+          "description": "URL opened by the Manual button."
+        },
+        "gvhidra.documentation.wikiUrl": {
+          "type": "string",
+          "default": "https://example.com/wiki",
+          "description": "URL opened by the Wiki button."
+        }
+      }
     }
   },
   "scripts": {
