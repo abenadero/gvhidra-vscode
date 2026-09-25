@@ -12,7 +12,7 @@ export abstract class WebviewSection {
 export function sectionMarkup(title: string, content: string): string {
     const sectionId = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     return `
-        <section class="section" aria-labelledby="section-${sectionId}">
+        <section class="section panel" aria-labelledby="section-${sectionId}">
             <h2 id="section-${sectionId}">${escapeHtml(title)}</h2>
             <div class="section-content">${content}</div>
         </section>`;

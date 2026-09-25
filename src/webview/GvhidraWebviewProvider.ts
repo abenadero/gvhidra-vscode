@@ -83,7 +83,9 @@ function getHtml(sections: string, nonce: string): string {
     <style nonce="${nonce}">
         :root { color-scheme: light dark; }
         body { box-sizing: border-box; margin: 0; padding: 12px; color: var(--vscode-foreground); background: var(--vscode-sideBar-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
-        .section { margin: 0 0 20px; }
+        .section { margin: 0 0 12px; }
+        .section:last-child { margin-bottom: 0; }
+        .panel { padding: 10px; border: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, rgba(127, 127, 127, .45))); border-radius: 4px; background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background)); box-shadow: 0 1px 4px var(--vscode-widget-shadow, rgba(0, 0, 0, .18)); }
         h2 { margin: 0 0 8px; color: var(--vscode-sideBarSectionHeader-foreground); font-size: 11px; font-weight: 700; letter-spacing: .4px; }
         .section-content, .input-form { display: flex; flex-direction: column; gap: 6px; }
         .input-form { margin: 0; }
