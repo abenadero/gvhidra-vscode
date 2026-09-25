@@ -3,7 +3,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
-import { actionButton, sectionMarkup, WebviewSection } from '../WebviewSection';
+import { WebviewControls } from '../../webview/components/WebviewControls';
+import { sectionMarkup, WebviewSection } from '../WebviewSection';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,8 +36,8 @@ export class PhpCsFixerSection extends WebviewSection {
         }
 
         return sectionMarkup('PHP CS FIXER', [
-            actionButton('Fix selected file', `${this.id}.fixSelectedFile`),
-            actionButton('Fix project', `${this.id}.fixProject`)
+            WebviewControls.setButton(`${this.id}.fixSelectedFile`, 'Fix selected file'),
+            WebviewControls.setButton(`${this.id}.fixProject`, 'Fix project')
         ].join(''));
     }
 

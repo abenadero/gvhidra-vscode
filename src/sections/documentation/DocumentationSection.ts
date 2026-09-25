@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { actionButton, sectionMarkup, WebviewSection } from '../WebviewSection';
+import { WebviewControls } from '../../webview/components/WebviewControls';
+import { sectionMarkup, WebviewSection } from '../WebviewSection';
 
 const CONFLUENCE_URL = 'https://confluence.gva.es/spaces/gvhidra/pages/723550873/%C2%BFQu%C3%A9+es+gvHIDRA';
 
@@ -8,9 +9,9 @@ export class DocumentationSection extends WebviewSection {
 
     public render(): string {
         return sectionMarkup('DOCUMENTATION', [
-            actionButton('Manual', `${this.id}.manual`),
-            actionButton('Wiki', `${this.id}.wiki`),
-            actionButton('Confluence', `${this.id}.confluence`)
+            WebviewControls.setButton(`${this.id}.manual`, 'Manual'),
+            WebviewControls.setButton(`${this.id}.wiki`, 'Wiki'),
+            WebviewControls.setButton(`${this.id}.confluence`, 'Confluence')
         ].join(''));
     }
 

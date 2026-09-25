@@ -42,7 +42,7 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
         const sectionId = message.command.slice(0, separator);
         const action = message.command.slice(separator + 1);
         const section = this.sections.find(candidate => candidate.id === sectionId);
-        await section?.handleAction(action);
+        await section?.handleAction(action, message.value);
     }
 
     private async render(): Promise<void> {
@@ -58,7 +58,9 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
 function isWebviewMessage(value: unknown): value is WebviewMessage {
     return typeof value === 'object'
         && value !== null
-        && typeof (value as { command?: unknown }).command === 'string';
+        && typeof (value as { command?: unknown }).command === 'string'
+        && ((value as { value?: unknown }).value === undefined
+            || typeof (value as { value?: unknown }).value === 'string');
 }
 
 function createNonce(): string {
@@ -82,7 +84,11 @@ function getHtml(sections: string, nonce: string): string {
         body { box-sizing: border-box; margin: 0; padding: 12px; color: var(--vscode-foreground); background: var(--vscode-sideBar-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
         .section { margin: 0 0 20px; }
         h2 { margin: 0 0 8px; color: var(--vscode-sideBarSectionHeader-foreground); font-size: 11px; font-weight: 700; letter-spacing: .4px; }
-        .section-content { display: flex; flex-direction: column; gap: 6px; }
+        .section-content, .input-form { display: flex; flex-direction: column; gap: 6px; }
+        .input-form { margin: 0; }
+        input { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); background: var(--vscode-input-background); font: inherit; }
+        input::placeholder { color: var(--vscode-input-placeholderForeground); }
+        input:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
         button { width: 100%; padding: 6px 10px; border: 1px solid var(--vscode-button-border, transparent); border-radius: 2px; color: var(--vscode-button-foreground); background: var(--vscode-button-background); font: inherit; text-align: left; cursor: pointer; }
         button:hover { background: var(--vscode-button-hoverBackground); }
         button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
@@ -102,6 +108,18 @@ function getHtml(sections: string, nonce: string): string {
             if (button instanceof HTMLButtonElement) {
                 vscode.postMessage({ command: button.dataset.command });
             }
+        });
+        document.addEventListener('submit', event => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || !form.dataset.commandForm) {
+                return;
+            }
+            event.preventDefault();
+            const input = form.elements.namedItem('value');
+            vscode.postMessage({
+                command: form.dataset.commandForm,
+                value: input instanceof HTMLInputElement ? input.value : ''
+            });
         });
     </script>
 </body>

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { actionButton, escapeHtml } from '../WebviewSection';
+import { WebviewControls } from '../../webview/components/WebviewControls';
+import { escapeHtml } from '../WebviewSection';
 
 interface FilePick extends vscode.QuickPickItem {
     readonly relativePath: string;
@@ -29,12 +30,12 @@ export class SVNHelper {
 
         return [
             `<p class="repository-kind">${status}</p>`,
-            actionButton('Choose Repository', `${SVNHelper.commandPrefix}.chooseRepository`),
-            actionButton('Checkout', `${SVNHelper.commandPrefix}.checkout`),
-            actionButton('Update', `${SVNHelper.commandPrefix}.update`),
-            actionButton('Commit', `${SVNHelper.commandPrefix}.commit`),
-            actionButton('Create TAG', `${SVNHelper.commandPrefix}.createTag`),
-            actionButton('Show History', `${SVNHelper.commandPrefix}.history`)
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.chooseRepository`, 'Choose Repository'),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.checkout`, 'Checkout'),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.update`, 'Update'),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.commit`, 'Commit'),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Create TAG'),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Show History')
         ].join('');
     }
 
