@@ -8,10 +8,9 @@ type RepositoryKind = 'git' | 'svn' | 'none';
 /**
  * Coordina la sección VERSION CONTROL sin implementar operaciones concretas.
  *
- * Su única responsabilidad es detectar .git y .svn en la raíz del proyecto,
- * escoger el helper adecuado y delegar en él tanto el HTML como los mensajes.
- * SVN tiene prioridad si, de forma excepcional, ambos metadatos están presentes;
- * por tanto GITHelper sólo se renderiza para proyectos Git que no son SVN.
+ * Detecta repositorios en las carpetas abiertas y también working copies SVN
+ * anidados. Para SVN prioriza el repositorio del fichero activo y delega en
+ * SVNHelper tanto el HTML como los mensajes.
  */
 export class VersionControlSection extends WebviewSection {
     public readonly id = 'version-control';
@@ -53,9 +52,9 @@ export class VersionControlSection extends WebviewSection {
      * impide que una acción SVN pueda ejecutarse mientras la vista está en Git,
      * y deja preparado el mismo aislamiento para futuras acciones Git.
      */
-    public async handleAction(action: string): Promise<boolean> {
+    public async handleAction(action: string, value?: string): Promise<boolean> {
         if (this.activeRepository === 'svn' && action.startsWith('svn.')) {
-            return this.svnHelper.handleAction(action.slice('svn.'.length));
+            return this.svnHelper.handleAction(action.slice('svn.'.length), value);
         }
         if (this.activeRepository === 'git' && action.startsWith('git.')) {
             return this.gitHelper.handleAction(action.slice('git.'.length));
@@ -64,20 +63,18 @@ export class VersionControlSection extends WebviewSection {
     }
 
     private async detectRepository(): Promise<RepositoryKind> {
-        const root = vscode.workspace.workspaceFolders?.[0];
-        if (!root) {
-            return 'none';
-        }
-
-        const [hasGit, hasSvn] = await Promise.all([
-            exists(vscode.Uri.joinPath(root.uri, '.git')),
-            exists(vscode.Uri.joinPath(root.uri, '.svn'))
-        ]);
-
-        if (hasSvn) {
+        const svnRoot = await SVNHelper.findWorkingCopyRoot();
+        if (svnRoot) {
+            this.svnHelper.setWorkingCopyRoot(svnRoot);
             return 'svn';
         }
-        return hasGit ? 'git' : 'none';
+
+        for (const root of vscode.workspace.workspaceFolders ?? []) {
+            if (await exists(vscode.Uri.joinPath(root.uri, '.git'))) {
+                return 'git';
+            }
+        }
+        return 'none';
     }
 }
 

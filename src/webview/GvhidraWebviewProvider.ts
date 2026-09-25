@@ -4,6 +4,7 @@ import { GenaroSection } from '../sections/genaro/GenaroSection';
 import { PhpCsFixerSection } from '../sections/php-cs-fixer/PhpCsFixerSection';
 import { VersionControlSection } from '../sections/version-control/VersionControlSection';
 import { WebviewMessage, WebviewSection } from '../sections/WebviewSection';
+import { WebviewControls } from './components/WebviewControls';
 
 export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'gvhidra-vscode.main';
@@ -86,6 +87,8 @@ function getHtml(sections: string, nonce: string): string {
         h2 { margin: 0 0 8px; color: var(--vscode-sideBarSectionHeader-foreground); font-size: 11px; font-weight: 700; letter-spacing: .4px; }
         .section-content, .input-form { display: flex; flex-direction: column; gap: 6px; }
         .input-form { margin: 0; }
+        .labelled-input { display: flex; flex-direction: column; gap: 4px; }
+        .labelled-input label { color: var(--vscode-descriptionForeground); font-size: 11px; }
         input { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); background: var(--vscode-input-background); font: inherit; }
         input::placeholder { color: var(--vscode-input-placeholderForeground); }
         input:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
@@ -99,6 +102,7 @@ function getHtml(sections: string, nonce: string): string {
     ${sections}
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
+        ${WebviewControls.getInputValueScript()}
         document.addEventListener('click', event => {
             const target = event.target;
             if (!(target instanceof Element)) {
@@ -106,7 +110,10 @@ function getHtml(sections: string, nonce: string): string {
             }
             const button = target.closest('button[data-command]');
             if (button instanceof HTMLButtonElement) {
-                vscode.postMessage({ command: button.dataset.command });
+                vscode.postMessage({
+                    command: button.dataset.command,
+                    value: button.dataset.inputId ? getInputValue(button.dataset.inputId) : undefined
+                });
             }
         });
         document.addEventListener('submit', event => {
@@ -115,10 +122,9 @@ function getHtml(sections: string, nonce: string): string {
                 return;
             }
             event.preventDefault();
-            const input = form.elements.namedItem('value');
             vscode.postMessage({
                 command: form.dataset.commandForm,
-                value: input instanceof HTMLInputElement ? input.value : ''
+                value: form.dataset.inputId ? getInputValue(form.dataset.inputId) : ''
             });
         });
     </script>

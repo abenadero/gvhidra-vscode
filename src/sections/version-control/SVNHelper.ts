@@ -2,10 +2,6 @@ import * as vscode from 'vscode';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
 
-interface FilePick extends vscode.QuickPickItem {
-    readonly relativePath: string;
-}
-
 /**
  * Contiene toda la interfaz y el comportamiento exclusivos de SVN.
  *
@@ -15,7 +11,19 @@ interface FilePick extends vscode.QuickPickItem {
  */
 export class SVNHelper {
     private static readonly commandPrefix = 'version-control.svn';
+    private static readonly repositoryInputId = 'svn-repository-url';
+    private static readonly repositoryPlaceholder = 'https://subversion.gva.es/svn/demo_gvhidra/demo_gvhidra';
+    private static readonly workingCopyInputId = 'svn-working-copy';
+    private workingCopyRoot?: vscode.Uri;
 
+    public static async findWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
+        return findSvnWorkingCopyRoot();
+    }
+
+    /** Establece la raíz exacta usada como cwd por todos los comandos SVN. */
+    public setWorkingCopyRoot(root: vscode.Uri): void {
+        this.workingCopyRoot = root;
+    }
     public constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly requestRender: () => void
@@ -30,12 +38,36 @@ export class SVNHelper {
 
         return [
             `<p class="repository-kind">${status}</p>`,
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.chooseRepository`, 'Choose Repository'),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.checkout`, 'Checkout'),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.update`, 'Update'),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.commit`, 'Commit'),
+            WebviewControls.setLabelledInput(
+                'Working Copy',
+                SVNHelper.workingCopyInputId,
+                this.workspaceRoot()?.fsPath ?? '',
+                '',
+                true
+            ),
+            WebviewControls.setLabelledInput(
+                'Repository URL',
+                SVNHelper.repositoryInputId,
+                repositoryUrl,
+                `example: ${SVNHelper.repositoryPlaceholder}`
+            ),
+            WebviewControls.setButtonWithInput(
+                `${SVNHelper.commandPrefix}.checkout`,
+                'Checkout',
+                SVNHelper.repositoryInputId
+            ),
+            WebviewControls.setButtonWithInput(
+                `${SVNHelper.commandPrefix}.update`,
+                'Update Repository',
+                SVNHelper.workingCopyInputId
+            ),
+            WebviewControls.setButtonWithInput(
+                `${SVNHelper.commandPrefix}.commit`,
+                'Commit Repository',
+                SVNHelper.workingCopyInputId
+            ),
             WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Create TAG'),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Show History')
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Show History for file selected')
         ].join('');
     }
 
@@ -43,12 +75,11 @@ export class SVNHelper {
      * Despacha únicamente acciones SVN. Devuelve false para que el coordinador
      * pueda identificar mensajes desconocidos sin ejecutar ningún comando.
      */
-    public async handleAction(action: string): Promise<boolean> {
+    public async handleAction(action: string, value?: string): Promise<boolean> {
         const actions: Record<string, () => Promise<void>> = {
-            chooseRepository: () => this.chooseRepository().then(() => undefined),
-            checkout: () => this.checkout(),
-            update: () => this.runTerminal('svn update'),
-            commit: () => this.commit(),
+            checkout: () => this.checkout(value),
+            update: () => this.update(value),
+            commit: () => this.commit(value),
             createTag: () => this.createTag(),
             history: () => this.showHistory()
         };
@@ -61,47 +92,53 @@ export class SVNHelper {
         return true;
     }
 
-    private workspaceRoot(): vscode.WorkspaceFolder | undefined {
-        return vscode.workspace.workspaceFolders?.[0];
+    private workspaceRoot(): vscode.Uri | undefined {
+        return this.workingCopyRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri;
     }
 
     private repositoryStorageKey(): string {
-        return `gvhidra.svnRepository.${this.workspaceRoot()?.uri.toString() ?? 'global'}`;
+        return `gvhidra.svnRepository.${this.workspaceRoot()?.toString() ?? 'global'}`;
     }
 
     private getRepositoryUrl(): string | undefined {
         return this.context.workspaceState.get<string>(this.repositoryStorageKey());
     }
 
-    /** Solicita y conserva por proyecto la URL empleada por el checkout SVN. */
-    private async chooseRepository(): Promise<string | undefined> {
-        const url = await vscode.window.showInputBox({
-            title: 'Choose SVN Repository',
-            prompt: 'Enter the SVN repository URL',
-            value: this.getRepositoryUrl(),
-            ignoreFocusOut: true,
-            validateInput: value => value.trim() ? undefined : 'The repository URL is required.'
-        });
-        if (url === undefined) {
+    /** Conserva por proyecto la URL recibida desde el input del Webview. */
+    private async chooseRepository(url?: string): Promise<string | undefined> {
+        const trimmedUrl = url?.trim();
+        if (!trimmedUrl) {
             return undefined;
         }
 
-        const trimmedUrl = url.trim();
         await this.context.workspaceState.update(this.repositoryStorageKey(), trimmedUrl);
         this.requestRender();
         return trimmedUrl;
     }
 
     /** Ejecuta checkout sobre el directorio raíz abierto en VS Code. */
-    private async checkout(): Promise<void> {
-        const repositoryUrl = this.getRepositoryUrl() ?? await this.chooseRepository();
+    private async checkout(url?: string): Promise<void> {
+        const repositoryUrl = await this.chooseRepository(url) ?? this.getRepositoryUrl();
         if (repositoryUrl) {
             await this.runTerminal(`svn checkout ${shellQuote(repositoryUrl)} .`);
         }
     }
 
-    /** Solicita mensaje y ficheros antes de ejecutar svn commit. */
-    private async commit(): Promise<void> {
+    /** Ejecuta update sobre la Working Copy mostrada en el Webview. */
+    private async update(workingCopyPath?: string): Promise<void> {
+        const root = await this.workingCopyFromInput(workingCopyPath);
+        if (root) {
+            await this.runTerminal('svn update', root);
+        }
+    }
+
+    /** Solicita el mensaje y ejecuta el commit sobre la Working Copy mostrada. */
+    private async commit(workingCopyPath?: string): Promise<void> {
+        const root = await this.workingCopyFromInput(workingCopyPath);
+        if (!root) {
+            return;
+        }
+
         const message = await vscode.window.showInputBox({
             title: 'SVN Commit',
             prompt: 'Enter the commit message',
@@ -112,13 +149,7 @@ export class SVNHelper {
             return;
         }
 
-        const files = await this.chooseProjectFiles('Choose files for the SVN commit');
-        if (!files?.length) {
-            return;
-        }
-
-        const paths = files.map(shellQuote).join(' ');
-        await this.runTerminal(`svn commit -m ${shellQuote(message.trim())} -- ${paths}`);
+        await this.runTerminal(`svn commit -m ${shellQuote(message.trim())}`, root);
     }
 
     /**
@@ -164,7 +195,7 @@ export class SVNHelper {
             return;
         }
 
-        const relativePath = vscode.workspace.asRelativePath(file, false);
+        const relativePath = file.fsPath;
         await this.runTerminal(`svn log -- ${shellQuote(relativePath)}`);
     }
 
@@ -176,13 +207,13 @@ export class SVNHelper {
         }
 
         const activeFile = vscode.window.activeTextEditor?.document.uri;
-        if (activeFile && activeFile.scheme === 'file' && isInside(activeFile, root.uri)) {
+        if (activeFile && activeFile.scheme === 'file' && isInside(activeFile, root)) {
             return activeFile;
         }
 
         const selected = await vscode.window.showOpenDialog({
             title: 'Choose a file to show its history',
-            defaultUri: root.uri,
+            defaultUri: root,
             canSelectFiles: true,
             canSelectFolders: false,
             canSelectMany: false
@@ -190,43 +221,93 @@ export class SVNHelper {
         return selected?.[0];
     }
 
-    private async chooseProjectFiles(placeHolder: string): Promise<string[] | undefined> {
-        const root = this.workspaceRoot();
-        if (!root) {
-            void vscode.window.showWarningMessage('Open a project folder first.');
+    /** Valida y devuelve la misma Working Copy mostrada en el Webview. */
+    private async workingCopyFromInput(path?: string): Promise<vscode.Uri | undefined> {
+        const trimmedPath = path?.trim();
+        if (!trimmedPath) {
+            void vscode.window.showWarningMessage('No SVN working copy has been selected.');
             return undefined;
         }
 
-        const uris = await vscode.workspace.findFiles(
-            new vscode.RelativePattern(root, '**/*'),
-            new vscode.RelativePattern(root, '{.git,.svn,node_modules,out}/**'),
-            5000
-        );
-        const items: FilePick[] = uris.map(uri => {
-            const relativePath = vscode.workspace.asRelativePath(uri, false);
-            return { label: relativePath, relativePath };
-        }).sort((left, right) => left.label.localeCompare(right.label));
+        const root = vscode.Uri.file(trimmedPath);
+        if (!await exists(vscode.Uri.joinPath(root, '.svn'))) {
+            void vscode.window.showWarningMessage(`The path is not an SVN working copy: ${trimmedPath}`);
+            return undefined;
+        }
 
-        const selected = await vscode.window.showQuickPick(items, {
-            title: placeHolder,
-            placeHolder,
-            canPickMany: true,
-            ignoreFocusOut: true
-        });
-        return selected?.map(item => item.relativePath);
+        this.workingCopyRoot = root;
+        return root;
     }
 
     /** Abre una terminal SVN situada en la raíz y ejecuta el comando recibido. */
-    private async runTerminal(command: string): Promise<void> {
-        const root = this.workspaceRoot();
+    private async runTerminal(
+        command: string,
+        root: vscode.Uri | undefined = this.workspaceRoot()
+    ): Promise<void> {
         if (!root) {
             void vscode.window.showWarningMessage('Open a project folder first.');
             return;
         }
 
-        const terminal = vscode.window.createTerminal({ name: 'GVHidra — SVN', cwd: root.uri });
+        const terminal = vscode.window.createTerminal({ name: 'GVHidra — SVN', cwd: root });
         terminal.show(true);
         terminal.sendText(command, true);
+    }
+}
+
+/**
+ * Localiza el working copy SVN asociado al fichero activo. Si no hay uno,
+ * busca repositorios directamente abiertos y, como último recurso, anidados.
+ */
+async function findSvnWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
+    const activeFile = vscode.window.activeTextEditor?.document.uri;
+    if (activeFile?.scheme === 'file') {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(activeFile);
+        if (workspaceFolder) {
+            const activeRoot = await findSvnAncestor(
+                vscode.Uri.joinPath(activeFile, '..'),
+                workspaceFolder.uri
+            );
+            if (activeRoot) {
+                return activeRoot;
+            }
+        }
+    }
+
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+        if (await exists(vscode.Uri.joinPath(folder.uri, '.svn'))) {
+            return folder.uri;
+        }
+    }
+
+    const databases = await vscode.workspace.findFiles('**/.svn/wc.db', null, 100);
+    return databases.length > 0 ? vscode.Uri.joinPath(databases[0], '..', '..') : undefined;
+}
+
+async function findSvnAncestor(start: vscode.Uri, boundary: vscode.Uri): Promise<vscode.Uri | undefined> {
+    let current = start;
+    while (isInside(current, boundary)) {
+        if (await exists(vscode.Uri.joinPath(current, '.svn'))) {
+            return current;
+        }
+        if (current.fsPath === boundary.fsPath) {
+            break;
+        }
+        const parent = vscode.Uri.joinPath(current, '..');
+        if (parent.fsPath === current.fsPath) {
+            break;
+        }
+        current = parent;
+    }
+    return undefined;
+}
+
+async function exists(uri: vscode.Uri): Promise<boolean> {
+    try {
+        await vscode.workspace.fs.stat(uri);
+        return true;
+    } catch {
+        return false;
     }
 }
 
