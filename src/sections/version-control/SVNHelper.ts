@@ -66,7 +66,7 @@ export class SVNHelper {
                 'Commit Repository',
                 SVNHelper.workingCopyInputId
             ),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Create TAG'),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Create tag from trunk'),
             WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Show History for file selected')
         ].join('');
     }
