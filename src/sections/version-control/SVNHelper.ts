@@ -196,7 +196,7 @@ export class SVNHelper {
         }
 
         const relativePath = file.fsPath;
-        await this.runTerminal(`svn log -- ${shellQuote(relativePath)}`);
+        await this.runTerminal(`svn log -r 1:HEAD -- ${shellQuote(relativePath)}`);
     }
 
     private async selectedFile(): Promise<vscode.Uri | undefined> {
