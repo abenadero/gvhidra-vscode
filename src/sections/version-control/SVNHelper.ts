@@ -301,7 +301,7 @@ export class SVNHelper {
         return undefined;
     }
 
-    /** Abre una terminal SVN situada en la raíz y ejecuta el comando recibido. */
+    /** Abre una terminal SVN, entra explícitamente en la raíz y ejecuta el comando. */
     private async runTerminal(
         command: string,
         root: vscode.Uri | undefined = this.workspaceRoot()
@@ -313,7 +313,7 @@ export class SVNHelper {
 
         const terminal = vscode.window.createTerminal({ name: 'GVHidra — SVN', cwd: root });
         terminal.show(true);
-        terminal.sendText(command, true);
+        terminal.sendText(`cd ${shellQuote(root.fsPath)} && ${command}`, true);
     }
 }
 
