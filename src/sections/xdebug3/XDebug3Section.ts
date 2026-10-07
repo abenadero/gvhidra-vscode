@@ -9,25 +9,30 @@ export class XDebug3Section extends WebviewSection {
     public readonly id = 'xdebug3';
 
     public render(): string {
-        return sectionMarkup(
-            'XDebug3',
+        return sectionMarkup('XDebug3', [
             WebviewControls.setButtonWithInput(
                 `${this.id}.initialize`,
                 'Inicializar Xdebug3',
                 WorkingDirectoryControl.inputId,
-                { variant: 'primary', icon: 'bug' }
+                { icon: 'bug' }
             ),
-            { icon: 'bug' }
-        );
+            WebviewControls.setButton(`${this.id}.startDebug`, 'Iniciar Debug', {
+                variant: 'primary',
+                icon: 'play'
+            })
+        ].join(''), { icon: 'bug' });
     }
 
     public async handleAction(action: string, value?: string): Promise<boolean> {
-        if (action !== 'initialize') {
-            return false;
+        if (action === 'initialize') {
+            await this.initialize(value);
+            return true;
         }
-
-        await this.initialize(value);
-        return true;
+        if (action === 'startDebug') {
+            await vscode.commands.executeCommand('workbench.action.debug.start');
+            return true;
+        }
+        return false;
     }
 
     private async initialize(workingDirectoryPath?: string): Promise<void> {
