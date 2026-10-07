@@ -1,7 +1,11 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Contiene toda la interfaz y el comportamiento exclusivos de SVN.
@@ -30,8 +34,8 @@ export class SVNHelper {
     ) {}
 
     /** Genera, en vertical, todos los controles disponibles para SVN. */
-    public render(): string {
-        const repositoryUrl = this.getRepositoryUrl();
+    public async render(): Promise<string> {
+        const repositoryUrl = await this.getWorkingCopyUrl() ?? this.getRepositoryUrl();
         const status = repositoryUrl
             ? `SVN repository detected: ${escapeHtml(repositoryUrl)}`
             : 'SVN repository detected';
@@ -103,6 +107,25 @@ export class SVNHelper {
 
     private getRepositoryUrl(): string | undefined {
         return this.context.workspaceState.get<string>(this.repositoryStorageKey());
+    }
+
+    /** Obtiene de SVN la URL asociada al directorio de trabajo común. */
+    private async getWorkingCopyUrl(): Promise<string | undefined> {
+        const workingDirectory = WorkingDirectoryControl.current();
+        if (!workingDirectory) {
+            return undefined;
+        }
+
+        try {
+            const { stdout } = await execFileAsync(
+                'svn',
+                ['info', '--show-item', 'url', workingDirectory.fsPath],
+                { cwd: workingDirectory.fsPath, timeout: 10_000, windowsHide: true }
+            );
+            return stdout.trim() || undefined;
+        } catch {
+            return undefined;
+        }
     }
 
     /** Conserva por proyecto la URL recibida desde el input del Webview. */

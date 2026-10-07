@@ -35,7 +35,7 @@ export class VersionControlSection extends WebviewSection {
         this.activeRepository = await this.detectRepository();
 
         if (this.activeRepository === 'svn') {
-            return sectionMarkup('Version control', this.svnHelper.render(), {
+            return sectionMarkup('Version control', await this.svnHelper.render(), {
                 icon: 'source-control',
                 status: 'SVN active',
                 statusTone: 'success'
