@@ -10,16 +10,16 @@ export class XDebug3Section extends WebviewSection {
 
     public render(): string {
         return sectionMarkup('XDebug3', [
-            WebviewControls.setButtonWithInput(
-                `${this.id}.initialize`,
-                'Inicializar Xdebug3',
-                WorkingDirectoryControl.inputId,
-                { icon: 'bug' }
-            ),
             WebviewControls.setButton(`${this.id}.startDebug`, 'Iniciar Debug', {
                 variant: 'primary',
                 icon: 'play'
-            })
+            }),
+            WebviewControls.setButtonWithInput(
+                `${this.id}.initialize`,
+                'Reconfigurar XDebug3',
+                WorkingDirectoryControl.inputId,
+                { icon: 'bug' }
+            )
         ].join(''), { icon: 'bug' });
     }
 

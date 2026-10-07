@@ -48,8 +48,11 @@ export class SVNHelper {
                 `${SVNHelper.commandPrefix}.checkout`,
                 'Checkout',
                 SVNHelper.repositoryInputId,
-                { variant: 'primary', icon: 'download' }
+                {icon: 'download' }
             ),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Crear tag desde trunk', {
+                icon: 'tag'
+            }),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.update`,
                 'Update',
@@ -62,9 +65,6 @@ export class SVNHelper {
                 WorkingDirectoryControl.inputId,
                 { variant: 'primary', icon: 'check' }
             ),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Crear tag desde trunk', {
-                variant: 'primary', icon: 'tag'
-            }),
             WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Mostrar historial de este fichero', {
                 variant: 'ghost',
                 icon: 'history'
