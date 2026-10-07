@@ -62,13 +62,13 @@ export class SVNHelper {
             }),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.update`,
-                'Update',
+                'Update del proyecto',
                 WorkingDirectoryControl.inputId,
                 { variant: 'primary', icon: 'refresh' }
             ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.commit`,
-                'Commit',
+                'Commit del proyecto',
                 WorkingDirectoryControl.inputId,
                 { variant: 'primary', icon: 'check' }
             ),
@@ -78,7 +78,7 @@ export class SVNHelper {
             }),
             WebviewControls.setButton(`${SVNHelper.commandPrefix}.resetCredentials`, 'Resetear credenciales globales', {
                 variant: 'ghost',
-                icon: 'refresh',
+                icon: 'trash',
                 tooltip: 'Borra las credenciales SVN almacenadas para todos los repositorios'
             })
         ].join('');
