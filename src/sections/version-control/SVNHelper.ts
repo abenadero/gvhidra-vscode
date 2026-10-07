@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process';
+import { rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
@@ -72,6 +75,11 @@ export class SVNHelper {
             WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Mostrar historial de este fichero', {
                 variant: 'ghost',
                 icon: 'history'
+            }),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.resetCredentials`, 'Resetear credenciales globales', {
+                variant: 'ghost',
+                icon: 'refresh',
+                tooltip: 'Borra las credenciales SVN almacenadas para todos los repositorios'
             })
         ].join('');
     }
@@ -86,7 +94,8 @@ export class SVNHelper {
             update: () => this.update(value),
             commit: () => this.commit(value),
             createTag: () => this.createTag(),
-            history: () => this.showHistory()
+            history: () => this.showHistory(),
+            resetCredentials: () => this.resetCredentials()
         };
         const handler = actions[action];
         if (!handler) {
@@ -221,6 +230,31 @@ export class SVNHelper {
 
         const relativePath = file.fsPath;
         await this.runTerminal(`svn log -r 1:HEAD -- ${shellQuote(relativePath)}`);
+    }
+
+    /**
+     * Borra la caché global de autenticación de Subversion tras una confirmación
+     * explícita. Se usa la API de ficheros en vez de una shell para que la ruta
+     * no pueda interpretarse como parte de un comando.
+     */
+    private async resetCredentials(): Promise<void> {
+        const authDirectory = join(homedir(), '.subversion', 'auth');
+        const confirmation = await vscode.window.showWarningMessage(
+            `Se borrarán todas las credenciales SVN guardadas en ${authDirectory}.`,
+            { modal: true, detail: 'Esta acción afecta a todos los repositorios SVN de este usuario.' },
+            'Resetear credenciales'
+        );
+        if (confirmation !== 'Resetear credenciales') {
+            return;
+        }
+
+        try {
+            await rm(authDirectory, { recursive: true, force: true });
+            void vscode.window.showInformationMessage('Las credenciales SVN guardadas se han reseteado.');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(`No se pudieron resetear las credenciales SVN: ${message}`);
+        }
     }
 
     private async selectedFile(): Promise<vscode.Uri | undefined> {
