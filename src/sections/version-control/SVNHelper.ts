@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
 
@@ -13,7 +14,6 @@ export class SVNHelper {
     private static readonly commandPrefix = 'version-control.svn';
     private static readonly repositoryInputId = 'svn-repository-url';
     private static readonly repositoryPlaceholder = 'https://subversion.gva.es/svn/demo_gvhidra/demo_gvhidra';
-    private static readonly workingCopyInputId = 'svn-working-copy';
     private workingCopyRoot?: vscode.Uri;
 
     public static async findWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
@@ -39,13 +39,6 @@ export class SVNHelper {
         return [
             `<p class="repository-kind">${status}</p>`,
             WebviewControls.setLabelledInput(
-                'Directorio de trabajo',
-                SVNHelper.workingCopyInputId,
-                this.workspaceRoot()?.fsPath ?? '',
-                '',
-                true
-            ),
-            WebviewControls.setLabelledInput(
                 'URL Repositorio',
                 SVNHelper.repositoryInputId,
                 repositoryUrl,
@@ -60,13 +53,13 @@ export class SVNHelper {
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.update`,
                 'Update',
-                SVNHelper.workingCopyInputId,
+                WorkingDirectoryControl.inputId,
                 { variant: 'primary', icon: 'refresh' }
             ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.commit`,
                 'Commit',
-                SVNHelper.workingCopyInputId,
+                WorkingDirectoryControl.inputId,
                 { variant: 'primary', icon: 'check' }
             ),
             WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Crear tag desde trunk', {
@@ -229,7 +222,7 @@ export class SVNHelper {
         return selected?.[0];
     }
 
-    /** Valida y devuelve la misma Working Copy mostrada en el Webview. */
+    /** Usa el directorio común o la copia SVN anidada detectada previamente. */
     private async workingCopyFromInput(path?: string): Promise<vscode.Uri | undefined> {
         const trimmedPath = path?.trim();
         if (!trimmedPath) {
@@ -237,14 +230,18 @@ export class SVNHelper {
             return undefined;
         }
 
-        const root = vscode.Uri.file(trimmedPath);
-        if (!await exists(vscode.Uri.joinPath(root, '.svn'))) {
-            void vscode.window.showWarningMessage(`The path is not an SVN working copy: ${trimmedPath}`);
-            return undefined;
+        const inputRoot = vscode.Uri.file(trimmedPath);
+        if (await exists(vscode.Uri.joinPath(inputRoot, '.svn'))) {
+            this.workingCopyRoot = inputRoot;
+            return inputRoot;
         }
 
-        this.workingCopyRoot = root;
-        return root;
+        if (this.workingCopyRoot && await exists(vscode.Uri.joinPath(this.workingCopyRoot, '.svn'))) {
+            return this.workingCopyRoot;
+        }
+
+        void vscode.window.showWarningMessage(`The path is not an SVN working copy: ${trimmedPath}`);
+        return undefined;
     }
 
     /** Abre una terminal SVN situada en la raíz y ejecuta el comando recibido. */

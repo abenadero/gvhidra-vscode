@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { WorkingDirectoryControl } from '../common/WorkingDirectoryControl';
 import { DocumentationSection } from '../sections/documentation/DocumentationSection';
 import { GenaroSection } from '../sections/genaro/GenaroSection';
 import { PhpCsFixerSection } from '../sections/php-cs-fixer/PhpCsFixerSection';
@@ -53,8 +54,9 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
         const nonce = createNonce();
+        const commonControls = WorkingDirectoryControl.render();
         const sections = await Promise.all(this.sections.map(section => section.render()));
-        this.view.webview.html = getHtml(sections.join('\n'), nonce);
+        this.view.webview.html = getHtml(commonControls, sections.join('\n'), nonce);
     }
 }
 
@@ -75,7 +77,7 @@ function createNonce(): string {
     return nonce;
 }
 
-function getHtml(sections: string, nonce: string): string {
+function getHtml(commonControls: string, sections: string, nonce: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -86,6 +88,7 @@ function getHtml(sections: string, nonce: string): string {
         :root { color-scheme: light dark; }
         * { box-sizing: border-box; }
         body { margin: 0; padding: 12px; color: var(--vscode-foreground); background: var(--vscode-sideBar-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
+        .common-working-directory { margin: 0 0 12px; padding: 10px; }
         .section { margin: 0 0 12px; overflow: hidden; }
         .section:last-child { margin-bottom: 0; }
         .panel { border: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, rgba(127, 127, 127, .35))); border-radius: 8px; background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background)); box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, .14)); }
@@ -138,6 +141,7 @@ function getHtml(sections: string, nonce: string): string {
     </style>
 </head>
 <body>
+    ${commonControls}
     ${sections}
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();

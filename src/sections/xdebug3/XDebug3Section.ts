@@ -1,32 +1,24 @@
 import { sep } from 'node:path';
 import * as vscode from 'vscode';
+import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { sectionMarkup, WebviewSection } from '../WebviewSection';
-
-const WORKING_DIRECTORY_INPUT_ID = 'xdebug3-working-directory';
 
 /** Crea la configuración de escucha de Xdebug 3 para el proyecto abierto. */
 export class XDebug3Section extends WebviewSection {
     public readonly id = 'xdebug3';
 
     public render(): string {
-        const workingDirectory = this.workingDirectory()?.fsPath ?? '';
-
-        return sectionMarkup('XDebug3', [
-            WebviewControls.setLabelledInput(
-                'Directorio de trabajo',
-                WORKING_DIRECTORY_INPUT_ID,
-                workingDirectory,
-                'Abre una carpeta de proyecto en VS Code',
-                true
-            ),
+        return sectionMarkup(
+            'XDebug3',
             WebviewControls.setButtonWithInput(
                 `${this.id}.initialize`,
                 'Inicializar Xdebug3',
-                WORKING_DIRECTORY_INPUT_ID,
+                WorkingDirectoryControl.inputId,
                 { variant: 'primary', icon: 'bug' }
-            )
-        ].join(''), { icon: 'bug' });
+            ),
+            { icon: 'bug' }
+        );
     }
 
     public async handleAction(action: string, value?: string): Promise<boolean> {
@@ -45,7 +37,7 @@ export class XDebug3Section extends WebviewSection {
             return;
         }
 
-        const workingDirectory = this.workspaceFolderForPath(trimmedPath);
+        const workingDirectory = WorkingDirectoryControl.resolveOpenFolder(trimmedPath);
         if (!workingDirectory) {
             void vscode.window.showErrorMessage('El directorio de trabajo no corresponde a una carpeta abierta en VS Code.');
             return;
@@ -85,23 +77,6 @@ export class XDebug3Section extends WebviewSection {
         void vscode.window.showInformationMessage(`Xdebug3 inicializado en ${launchFile.fsPath}.`);
     }
 
-    private workingDirectory(): vscode.Uri | undefined {
-        const activeDocument = vscode.window.activeTextEditor?.document.uri;
-        if (activeDocument) {
-            const activeFolder = vscode.workspace.getWorkspaceFolder(activeDocument);
-            if (activeFolder) {
-                return activeFolder.uri;
-            }
-        }
-        return vscode.workspace.workspaceFolders?.[0]?.uri;
-    }
-
-    private workspaceFolderForPath(path: string): vscode.Uri | undefined {
-        const requestedPath = comparablePath(vscode.Uri.file(path).fsPath);
-        return vscode.workspace.workspaceFolders
-            ?.find(folder => comparablePath(folder.uri.fsPath) === requestedPath)
-            ?.uri;
-    }
 }
 
 /** Devuelve el nombre del proyecto, es decir, el primer segmento tras htdocs. */
@@ -109,10 +84,6 @@ function projectNameAfterHtdocs(path: string): string | undefined {
     const segments = path.split(sep).filter(Boolean);
     const htdocsIndex = segments.map(segment => segment.toLowerCase()).lastIndexOf('htdocs');
     return htdocsIndex >= 0 ? segments[htdocsIndex + 1] : undefined;
-}
-
-function comparablePath(path: string): string {
-    return process.platform === 'win32' ? path.toLowerCase() : path;
 }
 
 function createLaunchConfiguration(projectName: string): string {
