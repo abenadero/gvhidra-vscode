@@ -1,3 +1,13 @@
+import { renderWebviewIcon, WebviewIconName } from './WebviewIcon';
+
+export type WebviewButtonVariant = 'primary' | 'secondary' | 'ghost';
+
+export interface WebviewButtonOptions {
+    variant?: WebviewButtonVariant;
+    icon?: WebviewIconName;
+    tooltip?: string;
+}
+
 /**
  * Genera controles HTML reutilizables para las distintas secciones del Webview.
  *
@@ -55,8 +65,11 @@ export class WebviewControls {
         buttonLabel: string,
         buttonTooltip: string,
         inputPlaceholder: string,
-        inputId: string = createInputId(action)
+        inputId: string = createInputId(action),
+        options: WebviewButtonOptions = { variant: 'primary' }
     ): string {
+        const variant = options.variant ?? 'primary';
+        const icon = options.icon ? renderWebviewIcon(options.icon, 'button-icon') : '';
         return `
             <form
                 class="input-form"
@@ -71,10 +84,11 @@ export class WebviewControls {
                     aria-label="${escapeHtml(inputPlaceholder)}"
                 >
                 <button
+                    class="button button--${variant}"
                     type="submit"
                     title="${escapeHtml(buttonTooltip)}"
                     aria-label="${escapeHtml(buttonTooltip)}"
-                >${escapeHtml(buttonLabel)}</button>
+                >${icon}<span>${escapeHtml(buttonLabel)}</span></button>
             </form>`;
     }
 
@@ -100,8 +114,12 @@ export class WebviewControls {
      * @param action Acción que ejecutará el botón.
      * @param buttonLabel Texto visible del botón.
      */
-    public static setButton(action: string, buttonLabel: string): string {
-        return `<button type="button" data-command="${escapeHtml(action)}">${escapeHtml(buttonLabel)}</button>`;
+    public static setButton(
+        action: string,
+        buttonLabel: string,
+        options: WebviewButtonOptions = {}
+    ): string {
+        return this.createButton(action, buttonLabel, options);
     }
 
     /**
@@ -111,8 +129,35 @@ export class WebviewControls {
      * @param buttonLabel Texto visible del botón.
      * @param inputId Identificador del input que se leerá al pulsarlo.
      */
-    public static setButtonWithInput(action: string, buttonLabel: string, inputId: string): string {
-        return `<button type="button" data-command="${escapeHtml(action)}" data-input-id="${escapeHtml(inputId)}">${escapeHtml(buttonLabel)}</button>`;
+    public static setButtonWithInput(
+        action: string,
+        buttonLabel: string,
+        inputId: string,
+        options: WebviewButtonOptions = {}
+    ): string {
+        return this.createButton(action, buttonLabel, options, inputId);
+    }
+
+    /**
+     * Crea cualquiera de las variantes visuales manteniendo una única
+     * estructura para estados, iconos, tooltips y atributos de mensajería.
+     */
+    public static createButton(
+        action: string,
+        buttonLabel: string,
+        options: WebviewButtonOptions = {},
+        inputId?: string
+    ): string {
+        const variant = options.variant ?? 'secondary';
+        const tooltip = options.tooltip
+            ? ` title="${escapeHtml(options.tooltip)}" aria-label="${escapeHtml(options.tooltip)}"`
+            : '';
+        const inputAttribute = inputId
+            ? ` data-input-id="${escapeHtml(inputId)}"`
+            : '';
+        const icon = options.icon ? renderWebviewIcon(options.icon, 'button-icon') : '';
+
+        return `<button class="button button--${variant}" type="button" data-command="${escapeHtml(action)}"${inputAttribute}${tooltip}>${icon}<span>${escapeHtml(buttonLabel)}</span></button>`;
     }
 }
 

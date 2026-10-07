@@ -5,7 +5,14 @@ export class GenaroSection extends WebviewSection {
     public readonly id = 'genaro';
 
     public render(): string {
-        return sectionMarkup('GENARO', WebviewControls.setButton(`${this.id}.placeholder`, 'Genaro'));
+        return sectionMarkup(
+            'Genaro',
+            WebviewControls.setButton(`${this.id}.placeholder`, 'Genaro', {
+                variant: 'primary',
+                icon: 'sparkles'
+            }),
+            { icon: 'sparkles' }
+        );
     }
 
     public async handleAction(_action: string): Promise<boolean> {

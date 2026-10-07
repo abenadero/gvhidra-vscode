@@ -35,15 +35,24 @@ export class VersionControlSection extends WebviewSection {
         this.activeRepository = await this.detectRepository();
 
         if (this.activeRepository === 'svn') {
-            return sectionMarkup('VERSION CONTROL', this.svnHelper.render());
+            return sectionMarkup('Version control', this.svnHelper.render(), {
+                icon: 'source-control',
+                status: 'SVN active',
+                statusTone: 'success'
+            });
         }
         if (this.activeRepository === 'git') {
-            return sectionMarkup('VERSION CONTROL', this.gitHelper.render());
+            return sectionMarkup('Version control', this.gitHelper.render(), {
+                icon: 'source-control',
+                status: 'Git active',
+                statusTone: 'success'
+            });
         }
 
         return sectionMarkup(
-            'VERSION CONTROL',
-            '<p class="repository-kind">No se ha reconocido este directorio como un proyecto GIT o SVN</p>'
+            'Version control',
+            '<p class="repository-kind">No se ha reconocido este directorio como un proyecto GIT o SVN.</p>',
+            { icon: 'source-control', status: 'Not detected', statusTone: 'warning' }
         );
     }
 

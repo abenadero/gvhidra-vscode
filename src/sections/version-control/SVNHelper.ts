@@ -39,14 +39,14 @@ export class SVNHelper {
         return [
             `<p class="repository-kind">${status}</p>`,
             WebviewControls.setLabelledInput(
-                'Working Copy',
+                'Directorio de trabajo',
                 SVNHelper.workingCopyInputId,
                 this.workspaceRoot()?.fsPath ?? '',
                 '',
                 true
             ),
             WebviewControls.setLabelledInput(
-                'Repository URL',
+                'URL Repositorio',
                 SVNHelper.repositoryInputId,
                 repositoryUrl,
                 `example: ${SVNHelper.repositoryPlaceholder}`
@@ -54,20 +54,28 @@ export class SVNHelper {
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.checkout`,
                 'Checkout',
-                SVNHelper.repositoryInputId
+                SVNHelper.repositoryInputId,
+                { variant: 'primary', icon: 'download' }
             ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.update`,
-                'Update Repository',
-                SVNHelper.workingCopyInputId
+                'Update',
+                SVNHelper.workingCopyInputId,
+                { variant: 'primary', icon: 'refresh' }
             ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.commit`,
-                'Commit Repository',
-                SVNHelper.workingCopyInputId
+                'Commit',
+                SVNHelper.workingCopyInputId,
+                { variant: 'primary', icon: 'check' }
             ),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Create tag from trunk'),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Show History for file selected')
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Crear tag desde trunk', {
+                variant: 'primary', icon: 'tag'
+            }),
+            WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Mostrar historial de este fichero', {
+                variant: 'ghost',
+                icon: 'history'
+            })
         ].join('');
     }
 

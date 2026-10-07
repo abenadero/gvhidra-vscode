@@ -1,3 +1,5 @@
+import { renderWebviewIcon, WebviewIconName } from '../webview/components/WebviewIcon';
+
 export interface WebviewMessage {
     command: string;
     value?: string;
@@ -9,13 +11,33 @@ export abstract class WebviewSection {
     public abstract handleAction(action: string, value?: string): Promise<boolean>;
 }
 
-export function sectionMarkup(title: string, content: string): string {
+export interface WebviewSectionOptions {
+    icon?: WebviewIconName;
+    status?: string;
+    statusTone?: 'neutral' | 'success' | 'warning';
+    initiallyOpen?: boolean;
+}
+
+export function sectionMarkup(
+    title: string,
+    content: string,
+    options: WebviewSectionOptions = {}
+): string {
     const sectionId = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const icon = renderWebviewIcon(options.icon ?? 'tools', 'section-icon');
+    const status = options.status
+        ? `<span class="section-status section-status--${options.statusTone ?? 'neutral'}">${escapeHtml(options.status)}</span>`
+        : '';
+    const open = options.initiallyOpen === false ? '' : ' open';
+
     return `
-        <section class="section panel" aria-labelledby="section-${sectionId}">
-            <h2 id="section-${sectionId}">${escapeHtml(title)}</h2>
+        <details class="section panel"${open}>
+            <summary class="section-header" aria-labelledby="section-${sectionId}">
+                <span class="section-heading">${icon}<span id="section-${sectionId}">${escapeHtml(title)}</span></span>
+                <span class="section-meta">${status}<span class="section-chevron" aria-hidden="true"></span></span>
+            </summary>
             <div class="section-content">${content}</div>
-        </section>`;
+        </details>`;
 }
 
 export function escapeHtml(value: string): string {

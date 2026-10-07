@@ -30,15 +30,21 @@ export class PhpCsFixerSection extends WebviewSection {
 
         if (!this.executable) {
             return sectionMarkup(
-                'PHP CS FIXER',
-                '<p class="repository-kind">No se encuentra php-cs-fixer en el entorno local.</p>'
+                'PHP CS Fixer',
+                '<p class="repository-kind">No se encuentra php-cs-fixer en el entorno local.</p>',
+                { icon: 'tools', status: 'No disponible', statusTone: 'warning' }
             );
         }
 
-        return sectionMarkup('PHP CS FIXER', [
-            WebviewControls.setButton(`${this.id}.fixSelectedFile`, 'Fix selected file'),
-            WebviewControls.setButton(`${this.id}.fixProject`, 'Fix project')
-        ].join(''));
+        return sectionMarkup('PHP CS Fixer', [
+            WebviewControls.setButton(`${this.id}.fixSelectedFile`, 'Fix selected file', {
+                variant: 'primary',
+                icon: 'file'
+            }),
+            WebviewControls.setButton(`${this.id}.fixProject`, 'Fix project', {
+                icon: 'folder'
+            })
+        ].join(''), { icon: 'tools', status: 'Ready', statusTone: 'success' });
     }
 
     /** Despacha exclusivamente las dos acciones publicadas por esta sección. */
