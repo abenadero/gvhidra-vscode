@@ -4,6 +4,7 @@ import { sectionMarkup, WebviewSection } from '../WebviewSection';
 
 const CONFLUENCE_URL = 'https://confluence.gva.es/spaces/gvhidra/pages/723550873/%C2%BFQu%C3%A9+es+gvHIDRA';
 const NEXUS_URL = 'https://nexus.gva.es/service/rest/repository/browse/public/es/gva/gvhidra/';
+const OFFICIAL_WEBSITE_URL = 'https://gvhidra.gva.es/es/descargas';
 
 export class DocumentationSection extends WebviewSection {
     public readonly id = 'documentation';
@@ -25,6 +26,10 @@ export class DocumentationSection extends WebviewSection {
             WebviewControls.setButton(`${this.id}.nexus`, 'Nexus', {
                 variant: 'ghost',
                 icon: 'external-link'
+            }),
+            WebviewControls.setButton(`${this.id}.officialWebsite`, 'Web Oficial', {
+                variant: 'ghost',
+                icon: 'external-link'
             })
         ].join(''), { icon: 'book' });
     }
@@ -35,7 +40,8 @@ export class DocumentationSection extends WebviewSection {
             manual: configuration.get<string>('manualUrl', 'https://example.com/manual'),
             wiki: configuration.get<string>('wikiUrl', 'https://example.com/wiki'),
             confluence: CONFLUENCE_URL,
-            nexus: NEXUS_URL
+            nexus: NEXUS_URL,
+            officialWebsite: OFFICIAL_WEBSITE_URL
         };
         const url = urls[action];
         if (!url) {
