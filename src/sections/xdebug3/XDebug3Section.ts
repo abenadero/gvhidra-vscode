@@ -1,0 +1,176 @@
+import { sep } from 'node:path';
+import * as vscode from 'vscode';
+import { WebviewControls } from '../../webview/components/WebviewControls';
+import { sectionMarkup, WebviewSection } from '../WebviewSection';
+
+const WORKING_DIRECTORY_INPUT_ID = 'xdebug3-working-directory';
+
+/** Crea la configuración de escucha de Xdebug 3 para el proyecto abierto. */
+export class XDebug3Section extends WebviewSection {
+    public readonly id = 'xdebug3';
+
+    public render(): string {
+        const workingDirectory = this.workingDirectory()?.fsPath ?? '';
+
+        return sectionMarkup('XDebug3', [
+            WebviewControls.setLabelledInput(
+                'Directorio de trabajo',
+                WORKING_DIRECTORY_INPUT_ID,
+                workingDirectory,
+                'Abre una carpeta de proyecto en VS Code',
+                true
+            ),
+            WebviewControls.setButtonWithInput(
+                `${this.id}.initialize`,
+                'Inicializar Xdebug3',
+                WORKING_DIRECTORY_INPUT_ID,
+                { variant: 'primary', icon: 'bug' }
+            )
+        ].join(''), { icon: 'bug' });
+    }
+
+    public async handleAction(action: string, value?: string): Promise<boolean> {
+        if (action !== 'initialize') {
+            return false;
+        }
+
+        await this.initialize(value);
+        return true;
+    }
+
+    private async initialize(workingDirectoryPath?: string): Promise<void> {
+        const trimmedPath = workingDirectoryPath?.trim();
+        if (!trimmedPath) {
+            void vscode.window.showWarningMessage('Abre una carpeta de proyecto antes de inicializar Xdebug3.');
+            return;
+        }
+
+        const workingDirectory = this.workspaceFolderForPath(trimmedPath);
+        if (!workingDirectory) {
+            void vscode.window.showErrorMessage('El directorio de trabajo no corresponde a una carpeta abierta en VS Code.');
+            return;
+        }
+        if (!await isDirectory(workingDirectory)) {
+            void vscode.window.showErrorMessage(`El directorio de trabajo no existe: ${trimmedPath}`);
+            return;
+        }
+
+        const projectName = projectNameAfterHtdocs(workingDirectory.fsPath);
+        if (!projectName) {
+            void vscode.window.showErrorMessage(
+                'El directorio de trabajo debe estar dentro de htdocs para calcular pathMappings.'
+            );
+            return;
+        }
+
+        const configurationDirectory = vscode.Uri.joinPath(workingDirectory, '.vscode');
+        const launchFile = vscode.Uri.joinPath(configurationDirectory, 'launch.json');
+
+        if (await exists(launchFile)) {
+            const choice = await vscode.window.showWarningMessage(
+                `Ya existe ${launchFile.fsPath}. ¿Quieres sustituirlo?`,
+                { modal: true },
+                'Sustituir'
+            );
+            if (choice !== 'Sustituir') {
+                return;
+            }
+        }
+
+        await vscode.workspace.fs.createDirectory(configurationDirectory);
+        await vscode.workspace.fs.writeFile(
+            launchFile,
+            new TextEncoder().encode(createLaunchConfiguration(projectName))
+        );
+        void vscode.window.showInformationMessage(`Xdebug3 inicializado en ${launchFile.fsPath}.`);
+    }
+
+    private workingDirectory(): vscode.Uri | undefined {
+        const activeDocument = vscode.window.activeTextEditor?.document.uri;
+        if (activeDocument) {
+            const activeFolder = vscode.workspace.getWorkspaceFolder(activeDocument);
+            if (activeFolder) {
+                return activeFolder.uri;
+            }
+        }
+        return vscode.workspace.workspaceFolders?.[0]?.uri;
+    }
+
+    private workspaceFolderForPath(path: string): vscode.Uri | undefined {
+        const requestedPath = comparablePath(vscode.Uri.file(path).fsPath);
+        return vscode.workspace.workspaceFolders
+            ?.find(folder => comparablePath(folder.uri.fsPath) === requestedPath)
+            ?.uri;
+    }
+}
+
+/** Devuelve el nombre del proyecto, es decir, el primer segmento tras htdocs. */
+function projectNameAfterHtdocs(path: string): string | undefined {
+    const segments = path.split(sep).filter(Boolean);
+    const htdocsIndex = segments.map(segment => segment.toLowerCase()).lastIndexOf('htdocs');
+    return htdocsIndex >= 0 ? segments[htdocsIndex + 1] : undefined;
+}
+
+function comparablePath(path: string): string {
+    return process.platform === 'win32' ? path.toLowerCase() : path;
+}
+
+function createLaunchConfiguration(projectName: string): string {
+    const serverProjectPath = JSON.stringify(`/var/www/htdocs/${projectName}`);
+
+    return `{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Listen for Xdebug",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "stopOnEntry": false,
+            "log": true,
+            "ignore": [
+                "**/vendor/**/*.php"
+            ],
+            "pathMappings": {
+                ${serverProjectPath}: "\${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Xdebug every line",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "stopOnEntry": true,
+            "log": true,
+            "ignore": [
+                "**/vendor/**/*.php"
+            ],
+            "pathMappings": {
+                ${serverProjectPath}: "\${workspaceFolder}"
+            }
+        }
+    ]
+}
+`;
+}
+
+async function exists(uri: vscode.Uri): Promise<boolean> {
+    try {
+        await vscode.workspace.fs.stat(uri);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function isDirectory(uri: vscode.Uri): Promise<boolean> {
+    try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        return (stat.type & vscode.FileType.Directory) !== 0;
+    } catch {
+        return false;
+    }
+}

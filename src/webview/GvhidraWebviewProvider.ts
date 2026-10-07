@@ -4,6 +4,7 @@ import { GenaroSection } from '../sections/genaro/GenaroSection';
 import { PhpCsFixerSection } from '../sections/php-cs-fixer/PhpCsFixerSection';
 import { VersionControlSection } from '../sections/version-control/VersionControlSection';
 import { WebviewMessage, WebviewSection } from '../sections/WebviewSection';
+import { XDebug3Section } from '../sections/xdebug3/XDebug3Section';
 import { WebviewControls } from './components/WebviewControls';
 
 export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
@@ -17,6 +18,7 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
             new VersionControlSection(context, () => this.render()),
             new GenaroSection(),
             new PhpCsFixerSection(),
+            new XDebug3Section(),
             new DocumentationSection()
         ];
     }

@@ -1,5 +1,6 @@
 export type WebviewIconName =
     | 'book'
+    | 'bug'
     | 'check'
     | 'download'
     | 'external-link'
@@ -14,6 +15,7 @@ export type WebviewIconName =
 
 const iconPaths: Record<WebviewIconName, string> = {
     book: '<path d="M2.5 2.5h4a2 2 0 0 1 2 2v9a2 2 0 0 0-2-2h-4zM13.5 2.5h-3a2 2 0 0 0-2 2v9a2 2 0 0 1 2-2h3z"/>',
+    bug: '<path d="M5 5.5h6v4a3 3 0 0 1-6 0zM6.5 5.5v-1a1.5 1.5 0 0 1 3 0v1M2.5 6.5H5m6 0h2.5M2.5 10H5m6 0h2.5M4 3l1.5 1.5M12 3l-1.5 1.5M8 6v6"/>',
     check: '<path d="m3 8.5 3.2 3.2L13 4.9"/>',
     download: '<path d="M8 2v8m-3-3 3 3 3-3M3 13.5h10"/>',
     'external-link': '<path d="M9 3h4v4m0-4L7.5 8.5M7 4H3v9h9V9"/>',
