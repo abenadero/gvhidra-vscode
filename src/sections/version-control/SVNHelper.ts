@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { rm } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
@@ -9,6 +9,11 @@ import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
 
 const execFileAsync = promisify(execFile);
+
+interface SvnCredentials {
+    username: string;
+    password: string;
+}
 
 /**
  * Contiene toda la interfaz y el comportamiento exclusivos de SVN.
@@ -53,34 +58,52 @@ export class SVNHelper {
             ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.checkout`,
-                'Checkout',
+                'Checkout de la URL',
                 SVNHelper.repositoryInputId,
                 {icon: 'download' }
             ),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.createTag`, 'Crear tag desde trunk', {
-                icon: 'tag'
-            }),
+            WebviewControls.setButtonWithInput(
+                `${SVNHelper.commandPrefix}.createTag`,
+                'Crear tag desde URL',
+                SVNHelper.repositoryInputId,
+                { icon: 'tag' }
+            ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.update`,
-                'Update del proyecto',
-                WorkingDirectoryControl.inputId,
+                'Update desde URL',
+                SVNHelper.repositoryInputId,
                 { variant: 'primary', icon: 'refresh' }
             ),
             WebviewControls.setButtonWithInput(
                 `${SVNHelper.commandPrefix}.commit`,
-                'Commit del proyecto',
-                WorkingDirectoryControl.inputId,
+                'Commit desde URL',
+                SVNHelper.repositoryInputId,
                 { variant: 'primary', icon: 'check' }
             ),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.history`, 'Mostrar historial de este fichero', {
-                variant: 'ghost',
-                icon: 'history'
-            }),
-            WebviewControls.setButton(`${SVNHelper.commandPrefix}.resetCredentials`, 'Resetear credenciales globales', {
-                variant: 'ghost',
-                icon: 'trash',
-                tooltip: 'Borra las credenciales SVN almacenadas para todos los repositorios'
-            })
+            WebviewControls.setButtonWithInput(
+                `${SVNHelper.commandPrefix}.manageProjectCredentials`,
+                'Gestionar credenciales del proyecto',
+                WorkingDirectoryControl.inputId,
+                {
+                    variant: 'ghost',
+                    icon: 'tools',
+                    tooltip: 'Guarda las credenciales SVN para el proyecto actual'
+                }
+            ),
+            WebviewControls.setButton(
+                `${SVNHelper.commandPrefix}.resetCredentials`,
+                'Resetear credenciales globales',
+                {
+                    variant: 'ghost',
+                    icon: 'trash',
+                    tooltip: 'Borra las credenciales SVN almacenadas para todos los repositorios'
+                }
+            ),
+            WebviewControls.setButton(
+                `${SVNHelper.commandPrefix}.history`,
+                'Mostrar historial del fichero activo',
+                { variant: 'ghost', icon: 'history' }
+            )
         ].join('');
     }
 
@@ -93,7 +116,8 @@ export class SVNHelper {
             checkout: () => this.checkout(value),
             update: () => this.update(value),
             commit: () => this.commit(value),
-            createTag: () => this.createTag(),
+            createTag: () => this.createTag(value),
+            manageProjectCredentials: () => this.manageProjectCredentials(value),
             history: () => this.showHistory(),
             resetCredentials: () => this.resetCredentials()
         };
@@ -120,7 +144,7 @@ export class SVNHelper {
 
     /** Obtiene de SVN la URL asociada al directorio de trabajo común. */
     private async getWorkingCopyUrl(): Promise<string | undefined> {
-        const workingDirectory = WorkingDirectoryControl.current();
+        const workingDirectory = this.workspaceRoot();
         if (!workingDirectory) {
             return undefined;
         }
@@ -149,26 +173,49 @@ export class SVNHelper {
         return trimmedUrl;
     }
 
+    /** Resuelve la URL indicada por el control y evita acciones sin referencia. */
+    private async repositoryFromInput(url?: string): Promise<string | undefined> {
+        const repositoryUrl = await this.chooseRepository(url);
+        if (!repositoryUrl) {
+            void vscode.window.showWarningMessage('Introduce primero una URL de SVN.');
+        }
+        return repositoryUrl;
+    }
+
     /** Ejecuta checkout sobre el directorio raíz abierto en VS Code. */
     private async checkout(url?: string): Promise<void> {
-        const repositoryUrl = await this.chooseRepository(url) ?? this.getRepositoryUrl();
+        const repositoryUrl = await this.repositoryFromInput(url);
+        if (!repositoryUrl) {
+            return;
+        }
+
+        const credentials = await this.promptAndStoreProjectCredentials(
+            WorkingDirectoryControl.current()?.fsPath
+        );
+        if (!credentials) {
+            return;
+        }
+
+        await this.runTerminal(
+            `svn checkout ${svnAuthenticationOptions(credentials)} ${shellQuote(repositoryUrl)} .`
+        );
+    }
+
+    /** Actualiza la copia de trabajo tomando la URL como origen. */
+    private async update(url?: string): Promise<void> {
+        const repositoryUrl = await this.repositoryFromInput(url);
         if (repositoryUrl) {
-            await this.runTerminal(`svn checkout ${shellQuote(repositoryUrl)} .`);
+            // `svn update` solo acepta rutas locales. `switch` es la operación
+            // equivalente que actualiza una working copy desde una URL.
+            const authentication = await this.authenticationOptionsForProject();
+            await this.runTerminal(`svn switch ${authentication}${shellQuote(repositoryUrl)} .`);
         }
     }
 
-    /** Ejecuta update sobre la Working Copy mostrada en el Webview. */
-    private async update(workingCopyPath?: string): Promise<void> {
-        const root = await this.workingCopyFromInput(workingCopyPath);
-        if (root) {
-            await this.runTerminal('svn update', root);
-        }
-    }
-
-    /** Solicita el mensaje y ejecuta el commit sobre la Working Copy mostrada. */
-    private async commit(workingCopyPath?: string): Promise<void> {
-        const root = await this.workingCopyFromInput(workingCopyPath);
-        if (!root) {
+    /** Hace commit en la copia de trabajo asociada a la URL indicada. */
+    private async commit(url?: string): Promise<void> {
+        const repositoryUrl = await this.repositoryFromInput(url);
+        if (!repositoryUrl || !await this.workingCopyMatches(repositoryUrl)) {
             return;
         }
 
@@ -182,14 +229,22 @@ export class SVNHelper {
             return;
         }
 
-        await this.runTerminal(`svn commit -m ${shellQuote(message.trim())}`, root);
+        const authentication = await this.authenticationOptionsForProject();
+        await this.runTerminal(
+            `svn commit ${authentication}-m ${shellQuote(message.trim())} .`
+        );
     }
 
     /**
-     * Crea una copia remota desde ^/crc/trunk hacia el nombre de tag indicado.
+     * Crea una copia remota desde la URL indicada hacia el nombre de tag indicado.
      * Ambos valores introducidos por el usuario se escapan antes de enviarlos.
      */
-    private async createTag(): Promise<void> {
+    private async createTag(url?: string): Promise<void> {
+        const repositoryUrl = await this.repositoryFromInput(url);
+        if (!repositoryUrl) {
+            return;
+        }
+
         const tagName = await vscode.window.showInputBox({
             title: 'Create SVN TAG',
             prompt: 'Enter the tag name',
@@ -205,6 +260,17 @@ export class SVNHelper {
             return;
         }
 
+        const destination = await vscode.window.showInputBox({
+            title: 'Create SVN TAG',
+            prompt: 'Enter the destination URL for the tag',
+            value: suggestedTagUrl(repositoryUrl, tagName.trim()),
+            ignoreFocusOut: true,
+            validateInput: value => value.trim() ? undefined : 'The destination URL is required.'
+        });
+        if (destination === undefined) {
+            return;
+        }
+
         const comment = await vscode.window.showInputBox({
             title: 'Create SVN TAG',
             prompt: 'Enter the tag comment',
@@ -215,21 +281,138 @@ export class SVNHelper {
             return;
         }
 
-        const destination = `^/crc/tags/${tagName.trim()}`;
+        const authentication = await this.authenticationOptionsForProject();
         await this.runTerminal(
-            `svn copy ${shellQuote('^/crc/trunk')} ${shellQuote(destination)} -m ${shellQuote(comment.trim())}`
+            `svn copy ${authentication}${shellQuote(repositoryUrl)} ${shellQuote(destination.trim())} -m ${shellQuote(comment.trim())}`
         );
     }
 
-    /** Muestra el log SVN del editor activo o de un fichero elegido. */
+    /** Muestra el log SVN del fichero activo. */
     private async showHistory(): Promise<void> {
         const file = await this.selectedFile();
         if (!file) {
             return;
         }
 
-        const relativePath = file.fsPath;
-        await this.runTerminal(`svn log -r 1:HEAD -- ${shellQuote(relativePath)}`);
+        const authentication = await this.authenticationOptionsForProject();
+        await this.runTerminal(
+            `svn log ${authentication}-r 1:HEAD -- ${shellQuote(file.fsPath)}`
+        );
+    }
+
+    /** Solicita y guarda las credenciales SVN propias del proyecto actual. */
+    private async manageProjectCredentials(workingDirectoryPath?: string): Promise<void> {
+        await this.promptAndStoreProjectCredentials(workingDirectoryPath);
+    }
+
+    /**
+     * Lee las credenciales del proyecto y genera las opciones comunes de SVN.
+     * Sin fichero, deja el comando en modo interactivo para que la terminal las pida.
+     */
+    private async authenticationOptionsForProject(): Promise<string> {
+        const credentialsFile = this.projectCredentialsFile(
+            WorkingDirectoryControl.current()?.fsPath,
+            false
+        );
+        if (credentialsFile) {
+            try {
+                const credentials = parseCredentials(await readFile(credentialsFile, 'utf8'));
+                if (credentials) {
+                    return `${svnAuthenticationOptions(credentials)} `;
+                }
+            } catch {
+                // La ausencia o ilegibilidad se trata igual: SVN mantiene su prompt interactivo.
+            }
+        }
+
+        void vscode.window.showWarningMessage(
+            'No se han almacenado credenciales SVN para este proyecto. '
+            + 'El comando las solicitará manualmente en la terminal.'
+        );
+        return '';
+    }
+
+    /** Comparte con Checkout y con el botón de gestión la solicitud y persistencia. */
+    private async promptAndStoreProjectCredentials(
+        workingDirectoryPath?: string
+    ): Promise<SvnCredentials | undefined> {
+        const credentialsFile = this.projectCredentialsFile(workingDirectoryPath, true);
+        if (!credentialsFile) {
+            return undefined;
+        }
+
+        const projectCredentialsDirectory = dirname(credentialsFile);
+        try {
+            await mkdir(projectCredentialsDirectory, { recursive: true });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(
+                `No se pudo crear la carpeta de credenciales SVN: ${message}`
+            );
+            return undefined;
+        }
+
+        const credentials = await promptForCredentials();
+        if (!credentials) {
+            return undefined;
+        }
+
+        try {
+            await writeFile(
+                credentialsFile,
+                serializeCredentials(credentials),
+                { encoding: 'utf8', mode: 0o600 }
+            );
+            await chmod(credentialsFile, 0o600);
+            void vscode.window.showWarningMessage(
+                `La contraseña SVN se ha almacenado sin cifrar en ${credentialsFile}.`
+            );
+            return credentials;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(
+                `No se pudieron guardar las credenciales SVN: ${message}`
+            );
+            return undefined;
+        }
+    }
+
+    /** Calcula el fichero asociado al directorio común sin crear nada todavía. */
+    private projectCredentialsFile(
+        workingDirectoryPath: string | undefined,
+        reportErrors: boolean
+    ): string | undefined {
+        const trimmedPath = workingDirectoryPath?.trim();
+        if (!trimmedPath) {
+            if (reportErrors) {
+                void vscode.window.showErrorMessage(
+                    'No hay un directorio de trabajo establecido para gestionar las credenciales SVN.'
+                );
+            }
+            return undefined;
+        }
+
+        const workingDirectory = WorkingDirectoryControl.resolveOpenFolder(trimmedPath);
+        if (!workingDirectory) {
+            if (reportErrors) {
+                void vscode.window.showErrorMessage(
+                    'El directorio de trabajo no corresponde a una carpeta abierta en VS Code.'
+                );
+            }
+            return undefined;
+        }
+
+        const projectPath = projectPathAfterHtdocs(workingDirectory.fsPath);
+        if (!projectPath) {
+            if (reportErrors) {
+                void vscode.window.showErrorMessage(
+                    'El directorio de trabajo debe estar dentro de htdocs para identificar el proyecto.'
+                );
+            }
+            return undefined;
+        }
+
+        return join(homedir(), '.subversion', 'auth', ...projectPath, 'svn-credentials');
     }
 
     /**
@@ -269,36 +452,23 @@ export class SVNHelper {
             return activeFile;
         }
 
-        const selected = await vscode.window.showOpenDialog({
-            title: 'Choose a file to show its history',
-            defaultUri: root,
-            canSelectFiles: true,
-            canSelectFolders: false,
-            canSelectMany: false
-        });
-        return selected?.[0];
+        void vscode.window.showWarningMessage('Abre un fichero del proyecto para mostrar su historial SVN.');
+        return undefined;
     }
 
-    /** Usa el directorio común o la copia SVN anidada detectada previamente. */
-    private async workingCopyFromInput(path?: string): Promise<vscode.Uri | undefined> {
-        const trimmedPath = path?.trim();
-        if (!trimmedPath) {
-            void vscode.window.showWarningMessage('No SVN working copy has been selected.');
-            return undefined;
+    /** Comprueba que un commit local pertenece exactamente a la URL elegida. */
+    private async workingCopyMatches(repositoryUrl: string): Promise<boolean> {
+        const workingCopyUrl = await this.getWorkingCopyUrl();
+        if (workingCopyUrl && normalizeSvnUrl(workingCopyUrl) === normalizeSvnUrl(repositoryUrl)) {
+            return true;
         }
 
-        const inputRoot = vscode.Uri.file(trimmedPath);
-        if (await exists(vscode.Uri.joinPath(inputRoot, '.svn'))) {
-            this.workingCopyRoot = inputRoot;
-            return inputRoot;
-        }
-
-        if (this.workingCopyRoot && await exists(vscode.Uri.joinPath(this.workingCopyRoot, '.svn'))) {
-            return this.workingCopyRoot;
-        }
-
-        void vscode.window.showWarningMessage(`The path is not an SVN working copy: ${trimmedPath}`);
-        return undefined;
+        void vscode.window.showWarningMessage(
+            workingCopyUrl
+                ? `La copia de trabajo corresponde a ${workingCopyUrl}, no a ${repositoryUrl}.`
+                : 'No se ha podido obtener la URL de la copia de trabajo SVN.'
+        );
+        return false;
     }
 
     /** Abre una terminal SVN, entra explícitamente en la raíz y ejecuta el comando. */
@@ -376,6 +546,90 @@ async function exists(uri: vscode.Uri): Promise<boolean> {
 /** Protege argumentos introducidos por el usuario para shells compatibles con POSIX. */
 function shellQuote(value: string): string {
     return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+/** Solicita ambas credenciales en prompts de VS Code, ocultando la contraseña. */
+async function promptForCredentials(): Promise<SvnCredentials | undefined> {
+    const username = await vscode.window.showInputBox({
+        title: 'Credenciales SVN del proyecto',
+        prompt: 'Usuario SVN',
+        ignoreFocusOut: true,
+        validateInput: value => value.trim() ? undefined : 'El usuario SVN es obligatorio.'
+    });
+    if (username === undefined) {
+        return undefined;
+    }
+
+    const password = await vscode.window.showInputBox({
+        title: 'Credenciales SVN del proyecto',
+        prompt: 'Contraseña SVN',
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: value => value.length > 0 ? undefined : 'La contraseña SVN es obligatoria.'
+    });
+    return password === undefined ? undefined : { username: username.trim(), password };
+}
+
+function serializeCredentials(credentials: SvnCredentials): string {
+    return `username=${credentials.username}\npassword=${credentials.password}\n`;
+}
+
+/** Lee el formato de texto simple conservando los signos igual del valor. */
+function parseCredentials(content: string): SvnCredentials | undefined {
+    const values = new Map<string, string>();
+    for (const line of content.split(/\r?\n/)) {
+        const separator = line.indexOf('=');
+        if (separator > 0) {
+            values.set(line.slice(0, separator), line.slice(separator + 1));
+        }
+    }
+
+    const username = values.get('username')?.trim();
+    const password = values.get('password');
+    return username && password ? { username, password } : undefined;
+}
+
+/** Opciones compartidas que evitan un segundo prompt y la caché global de SVN. */
+function svnAuthenticationOptions(credentials: SvnCredentials): string {
+    return [
+        '--non-interactive',
+        '--no-auth-cache',
+        '--username',
+        shellQuote(credentials.username),
+        '--password',
+        shellQuote(credentials.password)
+    ].join(' ');
+}
+
+/** Ignora únicamente la barra final al comparar dos URLs SVN. */
+function normalizeSvnUrl(url: string): string {
+    return url.trim().replace(/\/+$/, '');
+}
+
+/** Devuelve todos los segmentos situados a la derecha del último htdocs. */
+function projectPathAfterHtdocs(path: string): string[] | undefined {
+    const segments = path.split(/[\\/]+/).filter(Boolean);
+    const htdocsIndex = segments.map(segment => segment.toLowerCase()).lastIndexOf('htdocs');
+    const projectPath = htdocsIndex >= 0 ? segments.slice(htdocsIndex + 1) : [];
+    return projectPath.length > 0 ? projectPath : undefined;
+}
+
+/**
+ * Propone la ubicación convencional de tags y permite que el usuario la
+ * corrija antes de ejecutar el copy remoto.
+ */
+function suggestedTagUrl(sourceUrl: string, tagName: string): string {
+    const source = normalizeSvnUrl(sourceUrl);
+    const conventionalBase = source.match(/^(.*)\/trunk(?:\/.*)?$/)?.[1]
+        ?? source.match(/^(.*)\/branches\/[^/]+(?:\/.*)?$/)?.[1];
+    if (conventionalBase) {
+        return `${conventionalBase}/tags/${tagName}`;
+    }
+
+    const lastSeparator = source.lastIndexOf('/');
+    return lastSeparator >= 0
+        ? `${source.slice(0, lastSeparator)}/tags/${tagName}`
+        : `${source}/tags/${tagName}`;
 }
 
 function isInside(file: vscode.Uri, folder: vscode.Uri): boolean {
