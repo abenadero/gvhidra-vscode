@@ -139,7 +139,7 @@ export class WebviewControls {
     }
 
     /**
-     * Crea cualquiera de las variantes visuales manteniendo una única
+     * Crea cualquiera de las variantes visuales manteniendo una únicaawdawd
      * estructura para estados, iconos, tooltips y atributos de mensajería.
      */
     public static createButton(
