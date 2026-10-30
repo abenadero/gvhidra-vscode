@@ -45,7 +45,7 @@ export class PhpCsFixerSection extends WebviewSection {
         return sectionMarkup('PHP CS Fixer', [
             WebviewControls.setButton(`${this.id}.fixSelectedFile`, 'Fix selected file', {
                 variant: 'primary',
-                icon: 'file'
+                icon: 'tools'
             }),
             WebviewControls.setButton(`${this.id}.fixProject`, 'Fix project', {
                 icon: 'folder'

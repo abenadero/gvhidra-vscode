@@ -7,6 +7,7 @@ export type WebviewIconName =
     | 'file'
     | 'folder'
     | 'history'
+    | 'key'
     | 'play'
     | 'refresh'
     | 'source-control'
@@ -24,6 +25,7 @@ const iconPaths: Record<WebviewIconName, string> = {
     file: '<path d="M4 1.5h5l3 3V14H4zM9 1.5v3h3"/>',
     folder: '<path d="M1.5 4h5l1.5 1.5h6.5v7.5h-13z"/>',
     history: '<path d="M3.2 4.2A6 6 0 1 1 2 9m0-5v4h4M8 4.5V8l2.3 1.4"/>',
+    key: '<circle cx="5" cy="8" r="3"/><path d="M8 8h6M11 8v2M13 8v2"/>',
     play: '<path d="M5 2.5 13 8l-8 5.5z"/>',
     refresh: '<path d="M13 5V2l-1.7 1.7A5.5 5.5 0 1 0 13 9M13 2v3h-3"/>',
     'source-control': '<circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="13" r="1.5"/><path d="M5 4.5v4A4.5 4.5 0 0 0 9.5 13M11 11.5V7a2 2 0 0 0-2-2H7.5"/>',

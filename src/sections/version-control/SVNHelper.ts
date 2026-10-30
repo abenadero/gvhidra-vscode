@@ -86,7 +86,7 @@ export class SVNHelper {
                 WorkingDirectoryControl.inputId,
                 {
                     variant: 'ghost',
-                    icon: 'tools',
+                    icon: 'key',
                     tooltip: 'Guarda las credenciales SVN para el proyecto actual'
                 }
             ),
