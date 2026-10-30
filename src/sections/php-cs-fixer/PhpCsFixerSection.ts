@@ -3,8 +3,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
+import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { sectionMarkup, WebviewSection } from '../WebviewSection';
+import { PHP_CS_FIXER_CONFIGURATION } from './PhpCsFixerConfiguration';
 
 const execFileAsync = promisify(execFile);
 
@@ -14,7 +16,8 @@ const execFileAsync = promisify(execFile);
  * La detección prioriza el ejecutable instalado por Composer en el proyecto
  * (vendor/bin/php-cs-fixer), después Composer global y finalmente el comando
  * disponible en PATH.
- * Ningún botón se renderiza hasta localizar una de esas instalaciones.
+ * Las acciones de fix solo se renderizan tras localizar una instalación; la
+ * creación de la configuración permanece disponible en todo momento.
  */
 export class PhpCsFixerSection extends WebviewSection {
     public readonly id = 'php-cs-fixer';
@@ -31,7 +34,10 @@ export class PhpCsFixerSection extends WebviewSection {
         if (!this.executable) {
             return sectionMarkup(
                 'PHP CS Fixer',
-                '<p class="repository-kind">No se encuentra php-cs-fixer en el entorno local.</p>',
+                [
+                    '<p class="repository-kind">No se encuentra php-cs-fixer en el entorno local.</p>',
+                    this.createConfigurationButton()
+                ].join(''),
                 { icon: 'tools', status: 'No disponible', statusTone: 'warning' }
             );
         }
@@ -43,11 +49,12 @@ export class PhpCsFixerSection extends WebviewSection {
             }),
             WebviewControls.setButton(`${this.id}.fixProject`, 'Fix project', {
                 icon: 'folder'
-            })
+            }),
+            this.createConfigurationButton()
         ].join(''), { icon: 'tools', status: 'Ready', statusTone: 'success' });
     }
 
-    /** Despacha exclusivamente las dos acciones publicadas por esta sección. */
+    /** Despacha exclusivamente las acciones publicadas por esta sección. */
     public async handleAction(action: string): Promise<boolean> {
         if (action === 'fixSelectedFile') {
             await this.fixSelectedFile();
@@ -57,7 +64,19 @@ export class PhpCsFixerSection extends WebviewSection {
             await this.fixProject();
             return true;
         }
+        if (action === 'createConfiguration') {
+            await this.createConfiguration();
+            return true;
+        }
         return false;
+    }
+
+    private createConfigurationButton(): string {
+        return WebviewControls.setButton(
+            `${this.id}.createConfiguration`,
+            'Crear fichero configuración',
+            { icon: 'file' }
+        );
     }
 
     /**
@@ -66,14 +85,19 @@ export class PhpCsFixerSection extends WebviewSection {
      */
     private async fixSelectedFile(): Promise<void> {
         const editor = vscode.window.activeTextEditor;
-        const root = this.workspaceRoot();
+        const root = WorkingDirectoryControl.current();
         if (
             !editor
             || !root
             || editor.document.languageId !== 'php'
             || editor.document.uri.scheme !== 'file'
-            || !isInside(editor.document.uri, root.uri)
+            || !isInside(editor.document.uri, root)
         ) {
+            return;
+        }
+
+        const configuration = await this.requireProjectConfiguration(root);
+        if (!configuration) {
             return;
         }
 
@@ -82,8 +106,9 @@ export class PhpCsFixerSection extends WebviewSection {
         }
 
         await this.runFixer(
-            await this.buildFixArguments(editor.document.uri.fsPath),
-            'Fix selected PHP file'
+            this.buildFixArguments(editor.document.uri.fsPath, configuration),
+            'Fix selected PHP file',
+            root
         );
     }
 
@@ -92,61 +117,79 @@ export class PhpCsFixerSection extends WebviewSection {
      * directorios y procesa ficheros PHP, respetando las reglas del proyecto.
      */
     private async fixProject(): Promise<void> {
+        const root = WorkingDirectoryControl.current();
+        if (!root) {
+            return;
+        }
+        const configuration = await this.requireProjectConfiguration(root);
+        if (!configuration) {
+            return;
+        }
         if (!await vscode.workspace.saveAll(false)) {
             return;
         }
         await this.runFixer(
-            await this.buildFixArguments('.'),
-            'Fix PHP project'
+            this.buildFixArguments('.', configuration),
+            'Fix PHP project',
+            root
         );
     }
 
-    /**
-     * Evita que PHP CS Fixer abra su asistente interactivo cuando el proyecto
-     * no tiene configuración y desactiva la caché para no crear archivos en el
-     * proyecto. Sin configuración se declara @PSR12 explícitamente; si existe,
-     * se conserva sin sobrescribir sus reglas.
-     */
-    private async buildFixArguments(path: string): Promise<string[]> {
-        const args = ['fix', '--no-interaction', '--using-cache=no'];
-        if (!await this.hasProjectConfiguration()) {
-            args.push('--rules=@PSR12');
-        }
-        args.push('--', path);
-        return args;
+    /** Pasa la configuración requerida de forma explícita y evita preguntas interactivas. */
+    private buildFixArguments(path: string, configuration: vscode.Uri): string[] {
+        return ['fix', `--config=${configuration.fsPath}`, '--no-interaction', '--', path];
     }
 
-    /** Comprueba los dos nombres de configuración reconocidos por el fixer. */
-    private async hasProjectConfiguration(): Promise<boolean> {
-        const root = this.workspaceRoot();
-        if (!root) {
-            return false;
+    /** Exige la configuración de esta sección e informa de su ausencia en una terminal. */
+    private async requireProjectConfiguration(root: vscode.Uri): Promise<vscode.Uri | undefined> {
+        const configuration = vscode.Uri.joinPath(root, '.php-cs-fixer.php');
+        if (await exists(configuration)) {
+            return configuration;
         }
 
-        const configurations = [
-            vscode.Uri.joinPath(root.uri, '.php-cs-fixer.php'),
-            vscode.Uri.joinPath(root.uri, '.php-cs-fixer.dist.php')
-        ];
-        return (await Promise.all(configurations.map(exists))).some(Boolean);
+        showTerminalMessage(
+            `No existe el fichero ${configuration.fsPath}. `
+            + 'Puedes crearlo con el botón "Crear fichero configuración" de la sección PHP CS Fixer.'
+        );
+        return undefined;
+    }
+
+    /** Crea la configuración proporcionada por la extensión sin sobrescribir cambios del usuario. */
+    private async createConfiguration(): Promise<void> {
+        const root = WorkingDirectoryControl.current();
+        if (!root) {
+            void vscode.window.showWarningMessage('Abre una carpeta de proyecto antes de crear la configuración de PHP CS Fixer.');
+            return;
+        }
+
+        const configuration = vscode.Uri.joinPath(root, '.php-cs-fixer.php');
+        if (await exists(configuration)) {
+            void vscode.window.showWarningMessage(`El fichero ya existe: ${configuration.fsPath}`);
+            return;
+        }
+
+        await vscode.workspace.fs.writeFile(configuration, Buffer.from(PHP_CS_FIXER_CONFIGURATION, 'utf8'));
+        void vscode.window.showInformationMessage(`Configuración de PHP CS Fixer creada en ${configuration.fsPath}.`);
     }
 
     /**
      * Ejecuta mediante una tarea de VS Code para que argumentos y rutas sean
      * gestionados por el shell configurado y el progreso sea visible.
      */
-    private async runFixer(args: string[], taskName: string): Promise<void> {
-        const root = this.workspaceRoot();
-        const executable = this.executable ?? await this.findExecutable();
-        if (!root || !executable) {
+    private async runFixer(args: string[], taskName: string, root: vscode.Uri): Promise<void> {
+        const executable = await this.findExecutable(root);
+        if (!executable) {
             return;
         }
 
+        const taskScope = vscode.workspace.getWorkspaceFolder(root) ?? vscode.TaskScope.Workspace;
+
         const task = new vscode.Task(
             { type: 'gvhidra-php-cs-fixer' },
-            root,
+            taskScope,
             taskName,
             'GVHidra',
-            new vscode.ShellExecution(executable, args, { cwd: root.uri.fsPath })
+            new vscode.ShellExecution(executable, args, { cwd: root.fsPath })
         );
         task.presentationOptions = {
             reveal: vscode.TaskRevealKind.Always,
@@ -160,8 +203,7 @@ export class PhpCsFixerSection extends WebviewSection {
      * Busca primero las variantes de Composer para Linux/macOS y Windows. Si
      * no existen, revisa Composer global y finalmente consulta el PATH.
      */
-    private async findExecutable(): Promise<string | undefined> {
-        const root = this.workspaceRoot();
+    private async findExecutable(root = WorkingDirectoryControl.current()): Promise<string | undefined> {
         if (!root) {
             return undefined;
         }
@@ -171,7 +213,7 @@ export class PhpCsFixerSection extends WebviewSection {
             : ['vendor/bin/php-cs-fixer'];
 
         for (const relativePath of localCandidates) {
-            const candidate = vscode.Uri.joinPath(root.uri, ...relativePath.split('/'));
+            const candidate = vscode.Uri.joinPath(root, ...relativePath.split('/'));
             if (await exists(candidate)) {
                 return candidate.fsPath;
             }
@@ -202,7 +244,7 @@ export class PhpCsFixerSection extends WebviewSection {
         const locator = process.platform === 'win32' ? 'where.exe' : 'which';
         try {
             await execFileAsync(locator, ['php-cs-fixer'], {
-                cwd: root.uri.fsPath,
+                cwd: root.fsPath,
                 timeout: 5000,
                 windowsHide: true
             });
@@ -211,10 +253,19 @@ export class PhpCsFixerSection extends WebviewSection {
             return undefined;
         }
     }
+}
 
-    private workspaceRoot(): vscode.WorkspaceFolder | undefined {
-        return vscode.workspace.workspaceFolders?.[0];
-    }
+function showTerminalMessage(message: string): void {
+    const writeEmitter = new vscode.EventEmitter<string>();
+    const terminal = vscode.window.createTerminal({
+        name: 'GVHidra — PHP CS Fixer',
+        pty: {
+            onDidWrite: writeEmitter.event,
+            open: () => writeEmitter.fire(`${message}\r\n`),
+            close: () => writeEmitter.dispose()
+        }
+    });
+    terminal.show(true);
 }
 
 async function exists(uri: vscode.Uri): Promise<boolean> {
