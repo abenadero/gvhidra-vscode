@@ -27,6 +27,8 @@ export class PhpCsFixerSection extends WebviewSection {
     /**
      * Comprueba la instalación en cada renderizado. De este modo la vista nunca
      * ofrece acciones que no puedan ejecutarse en el entorno local.
+     *
+     * @returns Marcado HTML de la sección según la disponibilidad del ejecutable.
      */
     public async render(): Promise<string> {
         this.executable = await this.findExecutable();
@@ -54,7 +56,12 @@ export class PhpCsFixerSection extends WebviewSection {
         ].join(''), { icon: 'tools', status: 'Ready', statusTone: 'success' });
     }
 
-    /** Despacha exclusivamente las acciones publicadas por esta sección. */
+    /**
+     * Despacha exclusivamente las acciones publicadas por esta sección.
+     *
+     * @param action Nombre local de la acción solicitada.
+     * @returns `true` si la acción es conocida; en caso contrario, `false`.
+     */
     public async handleAction(action: string): Promise<boolean> {
         if (action === 'fixSelectedFile') {
             await this.fixSelectedFile();
@@ -71,6 +78,11 @@ export class PhpCsFixerSection extends WebviewSection {
         return false;
     }
 
+    /**
+     * Genera el botón que permite crear la configuración del proyecto.
+     *
+     * @returns Marcado HTML del botón de configuración.
+     */
     private createConfigurationButton(): string {
         return WebviewControls.setButton(
             `${this.id}.createConfiguration`,
@@ -82,6 +94,8 @@ export class PhpCsFixerSection extends WebviewSection {
     /**
      * Corrige únicamente el documento activo. Los documentos que no sean PHP,
      * no estén en disco o estén fuera del proyecto se ignoran deliberadamente.
+     *
+     * @returns Promesa que finaliza después de lanzar la tarea o descartar el documento.
      */
     private async fixSelectedFile(): Promise<void> {
         const editor = vscode.window.activeTextEditor;
@@ -115,6 +129,8 @@ export class PhpCsFixerSection extends WebviewSection {
     /**
      * Ejecuta PHP CS Fixer sobre la raíz completa. El propio fixer recorre los
      * directorios y procesa ficheros PHP, respetando las reglas del proyecto.
+     *
+     * @returns Promesa que finaliza después de lanzar la tarea o cancelar la operación.
      */
     private async fixProject(): Promise<void> {
         const root = WorkingDirectoryControl.current();
@@ -135,12 +151,23 @@ export class PhpCsFixerSection extends WebviewSection {
         );
     }
 
-    /** Pasa la configuración requerida de forma explícita y evita preguntas interactivas. */
+    /**
+     * Construye los argumentos de corrección con configuración explícita y sin interacción.
+     *
+     * @param path Fichero o directorio que debe procesar PHP CS Fixer.
+     * @param configuration URI del fichero de configuración del proyecto.
+     * @returns Argumentos listos para pasarlos al ejecutable.
+     */
     private buildFixArguments(path: string, configuration: vscode.Uri): string[] {
         return ['fix', `--config=${configuration.fsPath}`, '--no-interaction', '--', path];
     }
 
-    /** Exige la configuración de esta sección e informa de su ausencia en una terminal. */
+    /**
+     * Localiza la configuración requerida e informa de su ausencia en una terminal.
+     *
+     * @param root Raíz del proyecto en la que buscar `.php-cs-fixer.php`.
+     * @returns URI de la configuración o `undefined` si todavía no existe.
+     */
     private async requireProjectConfiguration(root: vscode.Uri): Promise<vscode.Uri | undefined> {
         const configuration = vscode.Uri.joinPath(root, '.php-cs-fixer.php');
         if (await exists(configuration)) {
@@ -154,7 +181,11 @@ export class PhpCsFixerSection extends WebviewSection {
         return undefined;
     }
 
-    /** Crea la configuración proporcionada por la extensión sin sobrescribir cambios del usuario. */
+    /**
+     * Crea la configuración proporcionada por la extensión sin sobrescribir cambios del usuario.
+     *
+     * @returns Promesa que finaliza cuando el fichero se crea o la operación se descarta.
+     */
     private async createConfiguration(): Promise<void> {
         const root = WorkingDirectoryControl.current();
         if (!root) {
@@ -175,6 +206,11 @@ export class PhpCsFixerSection extends WebviewSection {
     /**
      * Ejecuta mediante una tarea de VS Code para que argumentos y rutas sean
      * gestionados por el shell configurado y el progreso sea visible.
+     *
+     * @param args Argumentos que se pasarán al ejecutable.
+     * @param taskName Nombre visible de la tarea.
+     * @param root Directorio de trabajo de la ejecución.
+     * @returns Promesa que finaliza cuando VS Code acepta la tarea.
      */
     private async runFixer(args: string[], taskName: string, root: vscode.Uri): Promise<void> {
         const executable = await this.findExecutable(root);
@@ -202,6 +238,9 @@ export class PhpCsFixerSection extends WebviewSection {
     /**
      * Busca primero las variantes de Composer para Linux/macOS y Windows. Si
      * no existen, revisa Composer global y finalmente consulta el PATH.
+     *
+     * @param root Raíz del proyecto desde la que buscar y ejecutar el localizador.
+     * @returns Ruta o nombre del ejecutable, o `undefined` si no está disponible.
      */
     private async findExecutable(root = WorkingDirectoryControl.current()): Promise<string | undefined> {
         if (!root) {
@@ -255,6 +294,12 @@ export class PhpCsFixerSection extends WebviewSection {
     }
 }
 
+/**
+ * Muestra un mensaje informativo en una pseudoterminal dedicada.
+ *
+ * @param message Texto que se escribirá en la terminal.
+ * @returns No devuelve ningún valor.
+ */
 function showTerminalMessage(message: string): void {
     const writeEmitter = new vscode.EventEmitter<string>();
     const terminal = vscode.window.createTerminal({
@@ -268,6 +313,12 @@ function showTerminalMessage(message: string): void {
     terminal.show(true);
 }
 
+/**
+ * Comprueba si una URI corresponde a un fichero existente.
+ *
+ * @param uri Recurso que se desea consultar.
+ * @returns `true` si existe y es un fichero; en caso contrario, `false`.
+ */
 async function exists(uri: vscode.Uri): Promise<boolean> {
     try {
         const stat = await vscode.workspace.fs.stat(uri);
@@ -277,6 +328,13 @@ async function exists(uri: vscode.Uri): Promise<boolean> {
     }
 }
 
+/**
+ * Determina si un fichero está contenido en una carpeta o coincide con ella.
+ *
+ * @param file URI del recurso que se desea comprobar.
+ * @param folder URI de la carpeta límite.
+ * @returns `true` si el recurso pertenece a la carpeta.
+ */
 function isInside(file: vscode.Uri, folder: vscode.Uri): boolean {
     const separator = folder.fsPath.includes('\\') ? '\\' : '/';
     const folderPath = folder.fsPath.endsWith(separator) ? folder.fsPath : `${folder.fsPath}${separator}`;

@@ -14,6 +14,11 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private readonly sections: WebviewSection[];
 
+    /**
+     * Crea las secciones que componen la vista y conecta sus solicitudes de repintado.
+     *
+     * @param context Contexto de la extensión compartido con las secciones que lo necesitan.
+     */
     public constructor(context: vscode.ExtensionContext) {
         this.sections = [
             new VersionControlSection(context, () => this.render()),
@@ -24,6 +29,12 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
         ];
     }
 
+    /**
+     * Inicializa la vista, habilita sus scripts y registra la recepción de mensajes.
+     *
+     * @param view Vista de VS Code que debe gestionar el proveedor.
+     * @returns No devuelve ningún valor.
+     */
     public resolveWebviewView(view: vscode.WebviewView): void {
         this.view = view;
         view.webview.options = { enableScripts: true };
@@ -35,6 +46,12 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
         void this.render();
     }
 
+    /**
+     * Valida un mensaje del Webview y lo delega en la sección indicada por su prefijo.
+     *
+     * @param message Valor recibido desde el contexto no confiable del Webview.
+     * @returns Promesa que finaliza cuando la sección ha procesado la acción.
+     */
     private async handleMessage(message: unknown): Promise<void> {
         if (!isWebviewMessage(message)) {
             return;
@@ -49,6 +66,11 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
         await section?.handleAction(action, message.value);
     }
 
+    /**
+     * Renderiza en paralelo todas las secciones y actualiza el documento del Webview.
+     *
+     * @returns Promesa que finaliza cuando se asigna el HTML generado, o inmediatamente si no hay vista.
+     */
     private async render(): Promise<void> {
         if (!this.view) {
             return;
@@ -60,6 +82,12 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
     }
 }
 
+/**
+ * Comprueba que un valor recibido contiene la estructura admitida para mensajes del Webview.
+ *
+ * @param value Valor desconocido que se desea validar.
+ * @returns `true` si el valor contiene un comando y un valor opcional de texto.
+ */
 function isWebviewMessage(value: unknown): value is WebviewMessage {
     return typeof value === 'object'
         && value !== null
@@ -68,6 +96,11 @@ function isWebviewMessage(value: unknown): value is WebviewMessage {
             || typeof (value as { value?: unknown }).value === 'string');
 }
 
+/**
+ * Genera un nonce aleatorio para autorizar los estilos y scripts de la vista.
+ *
+ * @returns Cadena alfanumérica de 32 caracteres.
+ */
 function createNonce(): string {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let nonce = '';
@@ -77,6 +110,14 @@ function createNonce(): string {
     return nonce;
 }
 
+/**
+ * Construye el documento HTML completo de la vista con una política CSP basada en nonce.
+ *
+ * @param commonControls Marcado HTML de los controles compartidos.
+ * @param sections Marcado HTML de las secciones de la vista.
+ * @param nonce Valor usado para autorizar el estilo y el script embebidos.
+ * @returns Documento HTML listo para asignarlo al Webview.
+ */
 function getHtml(commonControls: string, sections: string, nonce: string): string {
     return `<!DOCTYPE html>
 <html lang="en">

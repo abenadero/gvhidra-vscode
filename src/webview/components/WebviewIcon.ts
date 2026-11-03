@@ -35,7 +35,13 @@ const iconPaths: Record<WebviewIconName, string> = {
     tools: '<path d="M9.5 2.3a3.2 3.2 0 0 0-3.8 4.2l-4 4a1.4 1.4 0 0 0 2 2l4-4a3.2 3.2 0 0 0 4.2-3.8L10 6.6 8.4 5z"/>'
 };
 
-/** Renderiza un icono vectorial decorativo que hereda el color del control. */
+/**
+ * Renderiza un icono vectorial decorativo que hereda el color del control.
+ *
+ * @param name Nombre del icono registrado.
+ * @param className Clase CSS adicional para ajustar su presentación.
+ * @returns Marcado SVG del icono.
+ */
 export function renderWebviewIcon(name: WebviewIconName, className = ''): string {
     const classes = ['icon', className].filter(Boolean).join(' ');
     return `<svg class="${classes}" viewBox="0 0 16 16" aria-hidden="true" focusable="false">${iconPaths[name]}</svg>`;

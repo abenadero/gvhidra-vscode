@@ -16,7 +16,14 @@ export interface WebviewButtonOptions {
  * envían tanto la acción como el valor escrito en el input asociado.
  */
 export class WebviewControls {
-    /** Crea un campo de texto independiente, sin botón asociado. */
+    /**
+     * Crea un campo de texto independiente, sin botón asociado.
+     *
+     * @param inputId Identificador HTML del campo.
+     * @param inputPlaceholder Texto orientativo del campo.
+     * @param value Valor inicial del campo.
+     * @returns Marcado HTML del campo de texto.
+     */
     public static setInputField(
         inputId: string,
         inputPlaceholder: string,
@@ -31,7 +38,16 @@ export class WebviewControls {
         >`;
     }
 
-    /** Crea un label seguido de un campo de texto editable o de solo lectura. */
+    /**
+     * Crea una etiqueta seguida de un campo de texto editable o de solo lectura.
+     *
+     * @param label Texto visible de la etiqueta.
+     * @param inputId Identificador HTML del campo.
+     * @param value Valor inicial del campo.
+     * @param placeholder Texto orientativo mostrado cuando el campo está vacío.
+     * @param readOnly Indica si el usuario puede modificar el campo.
+     * @returns Marcado HTML del control etiquetado.
+     */
     public static setLabelledInput(
         label: string,
         inputId: string,
@@ -59,6 +75,9 @@ export class WebviewControls {
      * @param buttonLabel Texto visible del botón.
      * @param buttonTooltip Ayuda mostrada al situar el cursor sobre el botón.
      * @param inputPlaceholder Texto orientativo mostrado dentro del input.
+     * @param inputId Identificador del campo; si se omite se deriva de la acción.
+     * @param options Opciones visuales del botón del formulario.
+     * @returns Marcado HTML del formulario.
      */
     public static setInput(
         action: string,
@@ -98,6 +117,8 @@ export class WebviewControls {
      * Este código se ejecuta dentro del Webview, donde sí está disponible el
      * DOM. La clase TypeScript se ejecuta en el Extension Host y por eso no debe
      * intentar acceder directamente a document.
+     *
+     * @returns Código JavaScript que define el lector de valores de campos.
      */
     public static getInputValueScript(): string {
         return `
@@ -113,6 +134,8 @@ export class WebviewControls {
      *
      * @param action Acción que ejecutará el botón.
      * @param buttonLabel Texto visible del botón.
+     * @param options Opciones visuales y de accesibilidad del botón.
+     * @returns Marcado HTML del botón.
      */
     public static setButton(
         action: string,
@@ -128,6 +151,8 @@ export class WebviewControls {
      * @param action Acción que ejecutará el botón.
      * @param buttonLabel Texto visible del botón.
      * @param inputId Identificador del input que se leerá al pulsarlo.
+     * @param options Opciones visuales y de accesibilidad del botón.
+     * @returns Marcado HTML del botón enlazado al campo.
      */
     public static setButtonWithInput(
         action: string,
@@ -139,8 +164,14 @@ export class WebviewControls {
     }
 
     /**
-     * Crea cualquiera de las variantes visuales manteniendo una únicaawdawd
+     * Crea cualquiera de las variantes visuales manteniendo una única
      * estructura para estados, iconos, tooltips y atributos de mensajería.
+     *
+     * @param action Acción enviada al pulsar el botón.
+     * @param buttonLabel Texto visible del botón.
+     * @param options Opciones visuales y de accesibilidad.
+     * @param inputId Campo opcional cuyo valor se enviará con la acción.
+     * @returns Marcado HTML del botón configurado.
      */
     public static createButton(
         action: string,
@@ -161,10 +192,22 @@ export class WebviewControls {
     }
 }
 
+/**
+ * Deriva un identificador HTML estable a partir del nombre de una acción.
+ *
+ * @param action Nombre de la acción asociada al campo.
+ * @returns Identificador con caracteres válidos para HTML.
+ */
 function createInputId(action: string): string {
     return `input-${action.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
 }
 
+/**
+ * Escapa texto antes de insertarlo en el HTML generado por los controles.
+ *
+ * @param value Texto sin escapar.
+ * @returns Texto con los caracteres HTML reservados codificados.
+ */
 function escapeHtml(value: string): string {
     return value.replace(/[&<>'"]/g, character => ({
         '&': '&amp;',

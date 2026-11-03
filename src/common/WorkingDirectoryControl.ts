@@ -8,6 +8,11 @@ import { WebviewControls } from '../webview/components/WebviewControls';
 export class WorkingDirectoryControl {
     public static readonly inputId = 'working-directory';
 
+    /**
+     * Genera el control HTML de solo lectura que muestra el directorio activo.
+     *
+     * @returns Marcado HTML del control de directorio de trabajo.
+     */
     public static render(): string {
         return `<div class="common-working-directory panel">
             ${WebviewControls.setLabelledInput(
@@ -20,7 +25,11 @@ export class WorkingDirectoryControl {
         </div>`;
     }
 
-    /** Prioriza la carpeta del editor activo en espacios de trabajo múltiples. */
+    /**
+     * Obtiene la carpeta de trabajo, priorizando la del editor activo en un workspace multirraíz.
+     *
+     * @returns URI de la carpeta seleccionada o `undefined` si no hay carpetas abiertas.
+     */
     public static current(): vscode.Uri | undefined {
         const activeDocument = vscode.window.activeTextEditor?.document.uri;
         if (activeDocument) {
@@ -32,7 +41,12 @@ export class WorkingDirectoryControl {
         return vscode.workspace.workspaceFolders?.[0]?.uri;
     }
 
-    /** Resuelve exclusivamente rutas correspondientes a carpetas abiertas. */
+    /**
+     * Resuelve una ruta únicamente cuando coincide con una carpeta abierta en VS Code.
+     *
+     * @param path Ruta de sistema de archivos que se desea resolver.
+     * @returns URI de la carpeta coincidente o `undefined` si la ruta no es válida o no está abierta.
+     */
     public static resolveOpenFolder(path?: string): vscode.Uri | undefined {
         const trimmedPath = path?.trim();
         if (!trimmedPath) {
@@ -46,6 +60,12 @@ export class WorkingDirectoryControl {
     }
 }
 
+/**
+ * Normaliza una ruta para comparaciones sensibles a la plataforma.
+ *
+ * @param path Ruta que se va a comparar.
+ * @returns Ruta en minúsculas en Windows o la ruta original en otros sistemas.
+ */
 function comparablePath(path: string): string {
     return process.platform === 'win32' ? path.toLowerCase() : path;
 }

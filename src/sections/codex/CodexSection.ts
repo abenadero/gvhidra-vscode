@@ -31,11 +31,20 @@ export class CodexSection extends WebviewSection {
     private executable?: string;
     private version?: string;
 
+    /**
+     * Crea la sección y conserva la función que permite refrescar la vista.
+     *
+     * @param requestRender Callback que solicita un nuevo renderizado del Webview.
+     */
     public constructor(private readonly requestRender: () => void) {
         super();
     }
 
-    /** Localiza el Codex incluido en la extensión de VS Code y muestra su versión. */
+    /**
+     * Localiza el Codex incluido en la extensión de VS Code y muestra su versión.
+     *
+     * @returns Marcado HTML de la sección y de las acciones disponibles.
+     */
     public async render(): Promise<string> {
         this.executable = await findCodexExecutable();
         this.version = this.executable
@@ -75,6 +84,12 @@ export class CodexSection extends WebviewSection {
         });
     }
 
+    /**
+     * Ejecuta una acción de instalación publicada por la sección.
+     *
+     * @param action Nombre local de la acción solicitada.
+     * @returns `true` si la acción es conocida; en caso contrario, `false`.
+     */
     public async handleAction(action: string): Promise<boolean> {
         if (action === 'installMarketplace') {
             await this.installMarketplace();
@@ -87,6 +102,11 @@ export class CodexSection extends WebviewSection {
         return false;
     }
 
+    /**
+     * Obtiene el ejecutable de Codex y muestra un error si no está disponible.
+     *
+     * @returns Ruta del ejecutable o `undefined` cuando no se encuentra.
+     */
     private async requireExecutable(): Promise<string | undefined> {
         this.executable ??= await findCodexExecutable();
         if (!this.executable) {
@@ -97,6 +117,11 @@ export class CodexSection extends WebviewSection {
         return this.executable;
     }
 
+    /**
+     * Registra el marketplace de Laberit mediante la CLI de Codex.
+     *
+     * @returns Promesa que finaliza después del intento de instalación.
+     */
     private async installMarketplace(): Promise<void> {
         const executable = await this.requireExecutable();
         if (!executable) {
@@ -116,6 +141,11 @@ export class CodexSection extends WebviewSection {
         }
     }
 
+    /**
+     * Consulta los plugins disponibles, solicita una selección e instala el elegido.
+     *
+     * @returns Promesa que finaliza tras instalar o cancelar la selección.
+     */
     private async chooseAndInstallPlugin(): Promise<void> {
         const executable = await this.requireExecutable();
         if (!executable) {
@@ -179,6 +209,8 @@ export class CodexSection extends WebviewSection {
 /**
  * Busca dentro de las instalaciones remota y local de VS Code partiendo
  * siempre del HOME actual. Se elige la extensión ChatGPT más reciente.
+ *
+ * @returns Ruta del primer ejecutable accesible o `undefined` si no existe.
  */
 async function findCodexExecutable(): Promise<string | undefined> {
     const extensionRoots = [
@@ -225,6 +257,12 @@ async function findCodexExecutable(): Promise<string | undefined> {
     return undefined;
 }
 
+/**
+ * Ejecuta Codex para obtener la versión instalada.
+ *
+ * @param executable Ruta del ejecutable de Codex.
+ * @returns Versión normalizada o `undefined` si el comando falla o no informa una versión.
+ */
 async function readCodexVersion(executable: string): Promise<string | undefined> {
     try {
         const { stdout } = await execFileAsync(executable, ['--version'], {
@@ -238,6 +276,14 @@ async function readCodexVersion(executable: string): Promise<string | undefined>
     }
 }
 
+/**
+ * Ejecuta un comando de Codex mientras VS Code muestra una notificación de progreso.
+ *
+ * @param executable Ruta del ejecutable de Codex.
+ * @param args Argumentos que se pasan a la CLI.
+ * @param title Texto visible en la notificación de progreso.
+ * @returns Salidas estándar y de error producidas por el proceso.
+ */
 async function runCodexWithProgress(
     executable: string,
     args: string[],
@@ -253,6 +299,13 @@ async function runCodexWithProgress(
     );
 }
 
+/**
+ * Convierte la respuesta JSON de Codex en las listas de plugins esperadas.
+ *
+ * @param output Texto JSON devuelto por la CLI.
+ * @returns Plugins instalados y disponibles con sus campos validados.
+ * @throws Si la raíz del JSON no es un objeto.
+ */
 function parsePluginList(output: string): CodexPluginList {
     const value: unknown = JSON.parse(output);
     if (!isRecord(value)) {
@@ -264,6 +317,12 @@ function parsePluginList(output: string): CodexPluginList {
     };
 }
 
+/**
+ * Filtra una colección desconocida y conserva únicamente plugins válidos.
+ *
+ * @param value Valor que debería contener una lista de plugins.
+ * @returns Lista normalizada; vacía cuando el valor no es una colección válida.
+ */
 function parsePlugins(value: unknown): CodexPlugin[] {
     if (!Array.isArray(value)) {
         return [];
@@ -281,15 +340,34 @@ function parsePlugins(value: unknown): CodexPlugin[] {
     });
 }
 
+/**
+ * Determina si un valor es un objeto no nulo que puede inspeccionarse por claves.
+ *
+ * @param value Valor desconocido que se desea comprobar.
+ * @returns `true` cuando el valor es un registro.
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
+/**
+ * Muestra un error de Codex combinando el contexto de la acción y el detalle del proceso.
+ *
+ * @param prefix Mensaje que identifica la operación fallida.
+ * @param error Error desconocido generado por la ejecución.
+ * @returns No devuelve ningún valor.
+ */
 function showCodexError(prefix: string, error: unknown): void {
     const detail = commandErrorMessage(error);
     void vscode.window.showErrorMessage(detail ? `${prefix}: ${detail}` : `${prefix}.`);
 }
 
+/**
+ * Extrae el mensaje más útil de un error de proceso o de una excepción estándar.
+ *
+ * @param error Error desconocido que se desea describir.
+ * @returns Última línea de `stderr`, mensaje de la excepción o `undefined`.
+ */
 function commandErrorMessage(error: unknown): string | undefined {
     if (isRecord(error)) {
         const stderr = typeof error.stderr === 'string' ? error.stderr.trim() : '';

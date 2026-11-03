@@ -9,6 +9,11 @@ const OFFICIAL_WEBSITE_URL = 'https://gvhidra.gva.es/es/descargas';
 export class DocumentationSection extends WebviewSection {
     public readonly id = 'documentation';
 
+    /**
+     * Genera los accesos a las fuentes de documentación de GVHidra.
+     *
+     * @returns Marcado HTML de la sección de documentación.
+     */
     public render(): string {
         return sectionMarkup('Documentation', [
             WebviewControls.setButton(`${this.id}.manual`, 'Manual', {
@@ -34,6 +39,12 @@ export class DocumentationSection extends WebviewSection {
         ].join(''), { icon: 'book' });
     }
 
+    /**
+     * Abre en el navegador la URL asociada a una acción conocida.
+     *
+     * @param action Identificador local del recurso que se desea abrir.
+     * @returns `true` si se encontró y abrió una URL; en caso contrario, `false`.
+     */
     public async handleAction(action: string): Promise<boolean> {
         const configuration = vscode.workspace.getConfiguration('gvhidra.documentation');
         const urls: Record<string, string> = {

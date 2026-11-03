@@ -8,6 +8,11 @@ import { sectionMarkup, WebviewSection } from '../WebviewSection';
 export class XDebug3Section extends WebviewSection {
     public readonly id = 'xdebug3';
 
+    /**
+     * Genera los controles para iniciar el depurador o crear su configuración.
+     *
+     * @returns Marcado HTML de la sección Xdebug 3.
+     */
     public render(): string {
         return sectionMarkup('XDebug3', [
             WebviewControls.setButton(`${this.id}.startDebug`, 'Iniciar Debug', {
@@ -23,6 +28,13 @@ export class XDebug3Section extends WebviewSection {
         ].join(''), { icon: 'bug' });
     }
 
+    /**
+     * Ejecuta una acción de inicialización o arranque del depurador.
+     *
+     * @param action Nombre local de la acción solicitada.
+     * @param value Ruta opcional recibida desde el control de directorio.
+     * @returns `true` si la acción fue reconocida; en caso contrario, `false`.
+     */
     public async handleAction(action: string, value?: string): Promise<boolean> {
         if (action === 'initialize') {
             await this.initialize(value);
@@ -35,6 +47,12 @@ export class XDebug3Section extends WebviewSection {
         return false;
     }
 
+    /**
+     * Crea el fichero `.vscode/launch.json` para el proyecto seleccionado.
+     *
+     * @param workingDirectoryPath Ruta de una carpeta abierta que contiene el proyecto.
+     * @returns Promesa que finaliza al crear la configuración o cancelar la operación.
+     */
     private async initialize(workingDirectoryPath?: string): Promise<void> {
         const trimmedPath = workingDirectoryPath?.trim();
         if (!trimmedPath) {
@@ -84,13 +102,24 @@ export class XDebug3Section extends WebviewSection {
 
 }
 
-/** Devuelve el nombre del proyecto, es decir, el primer segmento tras htdocs. */
+/**
+ * Obtiene el nombre del proyecto, definido como el primer segmento tras `htdocs`.
+ *
+ * @param path Ruta del proyecto que se desea analizar.
+ * @returns Nombre del proyecto o `undefined` si no existe un segmento válido.
+ */
 function projectNameAfterHtdocs(path: string): string | undefined {
     const segments = path.split(sep).filter(Boolean);
     const htdocsIndex = segments.map(segment => segment.toLowerCase()).lastIndexOf('htdocs');
     return htdocsIndex >= 0 ? segments[htdocsIndex + 1] : undefined;
 }
 
+/**
+ * Construye el contenido de `launch.json` con los mapeos de rutas de Xdebug.
+ *
+ * @param projectName Nombre del proyecto bajo el `htdocs` remoto.
+ * @returns Configuración JSON con comentarios lista para escribirse en disco.
+ */
 function createLaunchConfiguration(projectName: string): string {
     const serverProjectPath = JSON.stringify(`/var/www/htdocs/${projectName}`);
 
@@ -133,6 +162,12 @@ function createLaunchConfiguration(projectName: string): string {
 `;
 }
 
+/**
+ * Comprueba si una URI existe en el sistema de archivos del workspace.
+ *
+ * @param uri Recurso que se desea consultar.
+ * @returns `true` si puede obtenerse su estado; en caso contrario, `false`.
+ */
 async function exists(uri: vscode.Uri): Promise<boolean> {
     try {
         await vscode.workspace.fs.stat(uri);
@@ -142,6 +177,12 @@ async function exists(uri: vscode.Uri): Promise<boolean> {
     }
 }
 
+/**
+ * Comprueba si una URI existente representa un directorio.
+ *
+ * @param uri Recurso que se desea consultar.
+ * @returns `true` si el recurso es un directorio; en caso contrario, `false`.
+ */
 async function isDirectory(uri: vscode.Uri): Promise<boolean> {
     try {
         const stat = await vscode.workspace.fs.stat(uri);
