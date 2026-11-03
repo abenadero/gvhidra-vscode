@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { WorkingDirectoryControl } from '../common/WorkingDirectoryControl';
+import { CodexSection } from '../sections/codex/CodexSection';
 import { DocumentationSection } from '../sections/documentation/DocumentationSection';
-import { GenaroSection } from '../sections/genaro/GenaroSection';
 import { PhpCsFixerSection } from '../sections/php-cs-fixer/PhpCsFixerSection';
 import { VersionControlSection } from '../sections/version-control/VersionControlSection';
 import { WebviewMessage, WebviewSection } from '../sections/WebviewSection';
@@ -17,7 +17,7 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
     public constructor(context: vscode.ExtensionContext) {
         this.sections = [
             new VersionControlSection(context, () => this.render()),
-            new GenaroSection(),
+            new CodexSection(() => this.render()),
             new PhpCsFixerSection(),
             new XDebug3Section(),
             new DocumentationSection()
