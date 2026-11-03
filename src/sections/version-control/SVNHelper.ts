@@ -28,20 +28,50 @@ export class SVNHelper {
     private static readonly repositoryPlaceholder = 'https://subversion.gva.es/svn/demo_gvhidra/demo_gvhidra';
     private workingCopyRoot?: vscode.Uri;
 
-    public static async findWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
-        return findSvnWorkingCopyRoot();
+    /**
+     * Localiza la working copy que contiene el fichero activo.
+     *
+     * @returns URI de la raíz SVN activa o `undefined` si no existe.
+     */
+    public static async findActiveWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
+        return findActiveSvnWorkingCopyRoot();
     }
 
-    /** Establece la raíz exacta usada como cwd por todos los comandos SVN. */
+    /**
+     * Localiza una working copy anidada solamente cuando el resultado es único.
+     *
+     * @returns URI de la única raíz SVN encontrada o `undefined` si hay cero o varias.
+     */
+    public static async findUniqueNestedWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
+        return findUniqueNestedSvnWorkingCopyRoot();
+    }
+
+    /**
+     * Establece la raíz exacta usada como directorio de trabajo por los comandos SVN.
+     *
+     * @param root URI raíz de la working copy.
+     * @returns No devuelve ningún valor.
+     */
     public setWorkingCopyRoot(root: vscode.Uri): void {
         this.workingCopyRoot = root;
     }
+
+    /**
+     * Crea el helper con acceso al estado persistente y al refresco del Webview.
+     *
+     * @param context Contexto de la extensión usado para persistir la URL del repositorio.
+     * @param requestRender Callback que solicita un nuevo renderizado.
+     */
     public constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly requestRender: () => void
     ) {}
 
-    /** Genera, en vertical, todos los controles disponibles para SVN. */
+    /**
+     * Genera todos los controles disponibles para SVN.
+     *
+     * @returns Marcado HTML de los controles y el estado del repositorio.
+     */
     public async render(): Promise<string> {
         const repositoryUrl = await this.getWorkingCopyUrl() ?? this.getRepositoryUrl();
         const status = repositoryUrl
@@ -110,6 +140,10 @@ export class SVNHelper {
     /**
      * Despacha únicamente acciones SVN. Devuelve false para que el coordinador
      * pueda identificar mensajes desconocidos sin ejecutar ningún comando.
+     *
+     * @param action Nombre local de la acción SVN.
+     * @param value Valor opcional enviado por el control asociado.
+     * @returns `true` si la acción fue reconocida; en caso contrario, `false`.
      */
     public async handleAction(action: string, value?: string): Promise<boolean> {
         const actions: Record<string, () => Promise<void>> = {
@@ -130,19 +164,38 @@ export class SVNHelper {
         return true;
     }
 
+    /**
+     * Obtiene la raíz SVN seleccionada o la primera carpeta abierta como fallback.
+     *
+     * @returns URI usada como directorio de trabajo o `undefined` si no hay ninguna.
+     */
     private workspaceRoot(): vscode.Uri | undefined {
         return this.workingCopyRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri;
     }
 
+    /**
+     * Construye la clave que separa la URL persistida por cada workspace.
+     *
+     * @returns Clave de almacenamiento correspondiente a la raíz actual.
+     */
     private repositoryStorageKey(): string {
         return `gvhidra.svnRepository.${this.workspaceRoot()?.toString() ?? 'global'}`;
     }
 
+    /**
+     * Recupera la última URL SVN elegida para el workspace actual.
+     *
+     * @returns URL almacenada o `undefined` si todavía no se ha elegido ninguna.
+     */
     private getRepositoryUrl(): string | undefined {
         return this.context.workspaceState.get<string>(this.repositoryStorageKey());
     }
 
-    /** Obtiene de SVN la URL asociada al directorio de trabajo común. */
+    /**
+     * Obtiene mediante `svn info` la URL asociada al directorio de trabajo.
+     *
+     * @returns URL de la working copy o `undefined` si no puede consultarse.
+     */
     private async getWorkingCopyUrl(): Promise<string | undefined> {
         const workingDirectory = this.workspaceRoot();
         if (!workingDirectory) {
@@ -161,7 +214,12 @@ export class SVNHelper {
         }
     }
 
-    /** Conserva por proyecto la URL recibida desde el input del Webview. */
+    /**
+     * Valida y conserva por proyecto la URL recibida desde el input del Webview.
+     *
+     * @param url URL opcional introducida por el usuario.
+     * @returns URL sin espacios exteriores o `undefined` cuando está vacía.
+     */
     private async chooseRepository(url?: string): Promise<string | undefined> {
         const trimmedUrl = url?.trim();
         if (!trimmedUrl) {
@@ -173,7 +231,12 @@ export class SVNHelper {
         return trimmedUrl;
     }
 
-    /** Resuelve la URL indicada por el control y evita acciones sin referencia. */
+    /**
+     * Resuelve la URL indicada por el control y avisa cuando falta una referencia.
+     *
+     * @param url URL opcional introducida por el usuario.
+     * @returns URL normalizada o `undefined` si no se proporcionó una.
+     */
     private async repositoryFromInput(url?: string): Promise<string | undefined> {
         const repositoryUrl = await this.chooseRepository(url);
         if (!repositoryUrl) {
@@ -182,7 +245,12 @@ export class SVNHelper {
         return repositoryUrl;
     }
 
-    /** Ejecuta checkout sobre el directorio raíz abierto en VS Code. */
+    /**
+     * Ejecuta un checkout sobre el directorio raíz abierto en VS Code.
+     *
+     * @param url URL del repositorio que se desea descargar.
+     * @returns Promesa que finaliza tras abrir la terminal o cancelar la operación.
+     */
     private async checkout(url?: string): Promise<void> {
         const repositoryUrl = await this.repositoryFromInput(url);
         if (!repositoryUrl) {
@@ -201,7 +269,12 @@ export class SVNHelper {
         );
     }
 
-    /** Actualiza la copia de trabajo tomando la URL como origen. */
+    /**
+     * Actualiza la copia de trabajo tomando la URL como origen mediante `svn switch`.
+     *
+     * @param url URL de repositorio que debe usar la working copy.
+     * @returns Promesa que finaliza tras abrir la terminal o descartar la acción.
+     */
     private async update(url?: string): Promise<void> {
         const repositoryUrl = await this.repositoryFromInput(url);
         if (repositoryUrl) {
@@ -212,7 +285,12 @@ export class SVNHelper {
         }
     }
 
-    /** Hace commit en la copia de trabajo asociada a la URL indicada. */
+    /**
+     * Hace commit en la copia de trabajo asociada exactamente a la URL indicada.
+     *
+     * @param url URL contra la que se valida la working copy.
+     * @returns Promesa que finaliza tras abrir la terminal o cancelar el commit.
+     */
     private async commit(url?: string): Promise<void> {
         const repositoryUrl = await this.repositoryFromInput(url);
         if (!repositoryUrl || !await this.workingCopyMatches(repositoryUrl)) {
@@ -238,6 +316,9 @@ export class SVNHelper {
     /**
      * Crea una copia remota desde la URL indicada hacia el nombre de tag indicado.
      * Ambos valores introducidos por el usuario se escapan antes de enviarlos.
+     *
+     * @param url URL de origen que se copiará al nuevo tag.
+     * @returns Promesa que finaliza tras abrir la terminal o cancelar el asistente.
      */
     private async createTag(url?: string): Promise<void> {
         const repositoryUrl = await this.repositoryFromInput(url);
@@ -287,7 +368,11 @@ export class SVNHelper {
         );
     }
 
-    /** Muestra el log SVN del fichero activo. */
+    /**
+     * Muestra el log SVN del fichero activo en una terminal.
+     *
+     * @returns Promesa que finaliza tras abrir la terminal o descartar la acción.
+     */
     private async showHistory(): Promise<void> {
         const file = await this.selectedFile();
         if (!file) {
@@ -300,7 +385,12 @@ export class SVNHelper {
         );
     }
 
-    /** Solicita y guarda las credenciales SVN propias del proyecto actual. */
+    /**
+     * Solicita y guarda las credenciales SVN propias del proyecto actual.
+     *
+     * @param workingDirectoryPath Ruta de la carpeta abierta que identifica el proyecto.
+     * @returns Promesa que finaliza después del proceso de captura y almacenamiento.
+     */
     private async manageProjectCredentials(workingDirectoryPath?: string): Promise<void> {
         await this.promptAndStoreProjectCredentials(workingDirectoryPath);
     }
@@ -308,6 +398,8 @@ export class SVNHelper {
     /**
      * Lee las credenciales del proyecto y genera las opciones comunes de SVN.
      * Sin fichero, deja el comando en modo interactivo para que la terminal las pida.
+     *
+     * @returns Opciones de autenticación escapadas, o una cadena vacía para el modo interactivo.
      */
     private async authenticationOptionsForProject(): Promise<string> {
         const credentialsFile = this.projectCredentialsFile(
@@ -332,7 +424,12 @@ export class SVNHelper {
         return '';
     }
 
-    /** Comparte con Checkout y con el botón de gestión la solicitud y persistencia. */
+    /**
+     * Solicita y persiste las credenciales que comparten checkout y gestión manual.
+     *
+     * @param workingDirectoryPath Ruta de la carpeta que identifica el proyecto.
+     * @returns Credenciales guardadas o `undefined` si la operación falla o se cancela.
+     */
     private async promptAndStoreProjectCredentials(
         workingDirectoryPath?: string
     ): Promise<SvnCredentials | undefined> {
@@ -377,7 +474,13 @@ export class SVNHelper {
         }
     }
 
-    /** Calcula el fichero asociado al directorio común sin crear nada todavía. */
+    /**
+     * Calcula el fichero de credenciales asociado al proyecto sin crearlo.
+     *
+     * @param workingDirectoryPath Ruta de una carpeta abierta bajo `htdocs`.
+     * @param reportErrors Indica si deben mostrarse errores de validación al usuario.
+     * @returns Ruta del fichero de credenciales o `undefined` si no puede derivarse.
+     */
     private projectCredentialsFile(
         workingDirectoryPath: string | undefined,
         reportErrors: boolean
@@ -419,6 +522,8 @@ export class SVNHelper {
      * Borra la caché global de autenticación de Subversion tras una confirmación
      * explícita. Se usa la API de ficheros en vez de una shell para que la ruta
      * no pueda interpretarse como parte de un comando.
+     *
+     * @returns Promesa que finaliza después de borrar o cancelar la operación.
      */
     private async resetCredentials(): Promise<void> {
         const authDirectory = join(homedir(), '.subversion', 'auth');
@@ -440,6 +545,11 @@ export class SVNHelper {
         }
     }
 
+    /**
+     * Obtiene el fichero activo únicamente si pertenece a la raíz SVN seleccionada.
+     *
+     * @returns URI del fichero válido o `undefined` si no existe una selección utilizable.
+     */
     private async selectedFile(): Promise<vscode.Uri | undefined> {
         const root = this.workspaceRoot();
         if (!root) {
@@ -456,7 +566,12 @@ export class SVNHelper {
         return undefined;
     }
 
-    /** Comprueba que un commit local pertenece exactamente a la URL elegida. */
+    /**
+     * Comprueba que la working copy local pertenece exactamente a la URL elegida.
+     *
+     * @param repositoryUrl URL con la que se compara la información local.
+     * @returns `true` si ambas URLs coinciden; en caso contrario, `false`.
+     */
     private async workingCopyMatches(repositoryUrl: string): Promise<boolean> {
         const workingCopyUrl = await this.getWorkingCopyUrl();
         if (workingCopyUrl && normalizeSvnUrl(workingCopyUrl) === normalizeSvnUrl(repositoryUrl)) {
@@ -471,7 +586,13 @@ export class SVNHelper {
         return false;
     }
 
-    /** Abre una terminal SVN, entra explícitamente en la raíz y ejecuta el comando. */
+    /**
+     * Abre una terminal SVN, entra explícitamente en la raíz y ejecuta el comando.
+     *
+     * @param command Comando SVN completo que se enviará a la terminal.
+     * @param root Directorio de trabajo; por defecto usa la raíz SVN seleccionada.
+     * @returns Promesa que finaliza después de enviar el comando o avisar de que falta la raíz.
+     */
     private async runTerminal(
         command: string,
         root: vscode.Uri | undefined = this.workspaceRoot()
@@ -488,10 +609,12 @@ export class SVNHelper {
 }
 
 /**
- * Localiza el working copy SVN asociado al fichero activo. Si no hay uno,
- * busca repositorios directamente abiertos y, como último recurso, anidados.
+ * Localiza la working copy SVN asociada al fichero activo sin atravesar el
+ * límite de su carpeta de workspace.
+ *
+ * @returns URI de la raíz SVN activa o `undefined` si no se encuentra.
  */
-async function findSvnWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
+async function findActiveSvnWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
     const activeFile = vscode.window.activeTextEditor?.document.uri;
     if (activeFile?.scheme === 'file') {
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(activeFile);
@@ -505,17 +628,29 @@ async function findSvnWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
             }
         }
     }
-
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-        if (await exists(vscode.Uri.joinPath(folder.uri, '.svn'))) {
-            return folder.uri;
-        }
-    }
-
-    const databases = await vscode.workspace.findFiles('**/.svn/wc.db', null, 100);
-    return databases.length > 0 ? vscode.Uri.joinPath(databases[0], '..', '..') : undefined;
+    return undefined;
 }
 
+/**
+ * Usa una working copy anidada como fallback sólo cuando es inequívoca. Dos
+ * resultados bastan para saber que no se debe escoger una de forma arbitraria.
+ *
+ * @returns URI de la única working copy anidada o `undefined`.
+ */
+async function findUniqueNestedSvnWorkingCopyRoot(): Promise<vscode.Uri | undefined> {
+    const databases = await vscode.workspace.findFiles('**/.svn/wc.db', null, 2);
+    return databases.length === 1
+        ? vscode.Uri.joinPath(databases[0], '..', '..')
+        : undefined;
+}
+
+/**
+ * Recorre los ancestros de una ruta en busca de un marcador `.svn` sin superar un límite.
+ *
+ * @param start URI desde la que comienza el recorrido ascendente.
+ * @param boundary Carpeta límite incluida en la búsqueda.
+ * @returns URI del primer ancestro SVN o `undefined` si no existe.
+ */
 async function findSvnAncestor(start: vscode.Uri, boundary: vscode.Uri): Promise<vscode.Uri | undefined> {
     let current = start;
     while (isInside(current, boundary)) {
@@ -534,6 +669,12 @@ async function findSvnAncestor(start: vscode.Uri, boundary: vscode.Uri): Promise
     return undefined;
 }
 
+/**
+ * Comprueba si una URI existe en el sistema de archivos del workspace.
+ *
+ * @param uri Recurso que se desea consultar.
+ * @returns `true` si el recurso existe; en caso contrario, `false`.
+ */
 async function exists(uri: vscode.Uri): Promise<boolean> {
     try {
         await vscode.workspace.fs.stat(uri);
@@ -543,12 +684,21 @@ async function exists(uri: vscode.Uri): Promise<boolean> {
     }
 }
 
-/** Protege argumentos introducidos por el usuario para shells compatibles con POSIX. */
+/**
+ * Protege un argumento para su uso literal en shells compatibles con POSIX.
+ *
+ * @param value Valor que se desea escapar.
+ * @returns Valor entre comillas simples con las comillas internas protegidas.
+ */
 function shellQuote(value: string): string {
     return `'${value.replace(/'/g, `'\"'\"'`)}'`;
 }
 
-/** Solicita ambas credenciales en prompts de VS Code, ocultando la contraseña. */
+/**
+ * Solicita usuario y contraseña en prompts de VS Code, ocultando la contraseña.
+ *
+ * @returns Credenciales introducidas o `undefined` si el usuario cancela.
+ */
 async function promptForCredentials(): Promise<SvnCredentials | undefined> {
     const username = await vscode.window.showInputBox({
         title: 'Credenciales SVN del proyecto',
@@ -570,11 +720,22 @@ async function promptForCredentials(): Promise<SvnCredentials | undefined> {
     return password === undefined ? undefined : { username: username.trim(), password };
 }
 
+/**
+ * Serializa unas credenciales en el formato de texto simple usado por la extensión.
+ *
+ * @param credentials Usuario y contraseña que se desean guardar.
+ * @returns Contenido del fichero de credenciales.
+ */
 function serializeCredentials(credentials: SvnCredentials): string {
     return `username=${credentials.username}\npassword=${credentials.password}\n`;
 }
 
-/** Lee el formato de texto simple conservando los signos igual del valor. */
+/**
+ * Lee el formato de credenciales de texto simple conservando los signos igual del valor.
+ *
+ * @param content Contenido completo del fichero de credenciales.
+ * @returns Credenciales válidas o `undefined` si falta algún campo obligatorio.
+ */
 function parseCredentials(content: string): SvnCredentials | undefined {
     const values = new Map<string, string>();
     for (const line of content.split(/\r?\n/)) {
@@ -589,7 +750,12 @@ function parseCredentials(content: string): SvnCredentials | undefined {
     return username && password ? { username, password } : undefined;
 }
 
-/** Opciones compartidas que evitan un segundo prompt y la caché global de SVN. */
+/**
+ * Genera las opciones que evitan un segundo prompt y la caché global de SVN.
+ *
+ * @param credentials Credenciales que se pasarán al comando.
+ * @returns Fragmento de argumentos de autenticación con valores escapados.
+ */
 function svnAuthenticationOptions(credentials: SvnCredentials): string {
     return [
         '--non-interactive',
@@ -601,12 +767,22 @@ function svnAuthenticationOptions(credentials: SvnCredentials): string {
     ].join(' ');
 }
 
-/** Ignora únicamente la barra final al comparar dos URLs SVN. */
+/**
+ * Normaliza una URL SVN ignorando espacios exteriores y barras finales.
+ *
+ * @param url URL que se desea normalizar.
+ * @returns URL preparada para comparaciones.
+ */
 function normalizeSvnUrl(url: string): string {
     return url.trim().replace(/\/+$/, '');
 }
 
-/** Devuelve todos los segmentos situados a la derecha del último htdocs. */
+/**
+ * Obtiene todos los segmentos situados a la derecha del último `htdocs`.
+ *
+ * @param path Ruta de sistema de archivos que se desea analizar.
+ * @returns Segmentos que identifican el proyecto o `undefined` si no existen.
+ */
 function projectPathAfterHtdocs(path: string): string[] | undefined {
     const segments = path.split(/[\\/]+/).filter(Boolean);
     const htdocsIndex = segments.map(segment => segment.toLowerCase()).lastIndexOf('htdocs');
@@ -617,6 +793,10 @@ function projectPathAfterHtdocs(path: string): string[] | undefined {
 /**
  * Propone la ubicación convencional de tags y permite que el usuario la
  * corrija antes de ejecutar el copy remoto.
+ *
+ * @param sourceUrl URL SVN que se usará como origen.
+ * @param tagName Nombre del tag que se desea crear.
+ * @returns URL de destino sugerida bajo el directorio `tags`.
  */
 function suggestedTagUrl(sourceUrl: string, tagName: string): string {
     const source = normalizeSvnUrl(sourceUrl);
@@ -632,6 +812,13 @@ function suggestedTagUrl(sourceUrl: string, tagName: string): string {
         : `${source}/tags/${tagName}`;
 }
 
+/**
+ * Determina si un recurso está contenido en una carpeta o coincide con ella.
+ *
+ * @param file URI del recurso que se desea comprobar.
+ * @param folder URI de la carpeta límite.
+ * @returns `true` si el recurso pertenece a la carpeta.
+ */
 function isInside(file: vscode.Uri, folder: vscode.Uri): boolean {
     const separator = folder.fsPath.includes('\\') ? '\\' : '/';
     const folderPath = folder.fsPath.endsWith(separator) ? folder.fsPath : `${folder.fsPath}${separator}`;
