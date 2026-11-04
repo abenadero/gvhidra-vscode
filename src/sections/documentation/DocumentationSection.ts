@@ -4,6 +4,7 @@ import { sectionMarkup, WebviewSection } from '../WebviewSection';
 
 const CONFLUENCE_URL = 'https://confluence.gva.es/spaces/gvhidra/pages/723550873/%C2%BFQu%C3%A9+es+gvHIDRA';
 const NEXUS_URL = 'https://nexus.gva.es/service/rest/repository/browse/public/es/gva/gvhidra/';
+const JENKINS_URL = 'https://jenkins.gva.es/';
 const OFFICIAL_WEBSITE_URL = 'https://gvhidra.gva.es/es/descargas';
 
 export class DocumentationSection extends WebviewSection {
@@ -32,6 +33,10 @@ export class DocumentationSection extends WebviewSection {
                 variant: 'ghost',
                 icon: 'external-link'
             }),
+            WebviewControls.setButton(`${this.id}.jenkins`, 'Jenkins', {
+                variant: 'ghost',
+                icon: 'external-link'
+            }),
             WebviewControls.setButton(`${this.id}.officialWebsite`, 'Web Oficial', {
                 variant: 'ghost',
                 icon: 'external-link'
@@ -52,6 +57,7 @@ export class DocumentationSection extends WebviewSection {
             wiki: configuration.get<string>('wikiUrl', 'https://example.com/wiki'),
             confluence: CONFLUENCE_URL,
             nexus: NEXUS_URL,
+            jenkins: JENKINS_URL,
             officialWebsite: OFFICIAL_WEBSITE_URL
         };
         const url = urls[action];
