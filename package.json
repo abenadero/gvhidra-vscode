@@ -1,11 +1,40 @@
 {
   "name": "gvhidra-vscode",
   "displayName": "GVHidra for VSCode",
+  "description": "Apoyo al desarrollo gvHidra en entornos de la GVA con gvhidradev dentro de WSL.",
+  "publisher": "abenadero",
   "icon": "assets/icons/logo256px.png",
   "version": "0.0.1",
+  "license": "MIT",
+  "categories": [
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "gvhidra",
+    "gvhidradev",
+    "gva",
+    "php",
+    "wsl",
+    "git",
+    "svn",
+    "xdebug",
+    "php-cs-fixer",
+    "codex"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abenadero/gvhidra-vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/abenadero/gvhidra-vscode/issues"
+  },
   "engines": {
     "vscode": "^1.100.0"
   },
+  "extensionKind": [
+    "workspace"
+  ],
   "main": "./out/gvhidra-vscode.js",
   "activationEvents": [],
   "contributes": {
@@ -44,12 +73,17 @@
     }
   },
   "scripts": {
+    "vscode:prepublish": "npm run clean && npm run compile",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
     "compile": "tsc -p ./",
+    "package": "vsce package --no-dependencies",
+    "package:ls": "vsce ls --no-dependencies",
     "test": "npm run compile && node --test test/git-helper.test.cjs test/svn-helper.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^18.19.130",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "1.100.0",
+    "@vscode/vsce": "4.1.0",
     "typescript": "^5.0.0"
   }
 }
