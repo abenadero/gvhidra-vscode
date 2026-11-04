@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
+import { WebviewControls } from '../../webview/components/WebviewControls';
 import { sectionMarkup, WebviewSection } from '../WebviewSection';
 import { GITHelper } from './GITHelper';
 import { SVNHelper } from './SVNHelper';
@@ -14,6 +16,7 @@ type RepositoryKind = 'git' | 'svn' | 'none';
  */
 export class VersionControlSection extends WebviewSection {
     public readonly id = 'version-control';
+    private static readonly repositoryInputId = 'repository-url';
 
     private readonly gitHelper: GITHelper;
     private readonly svnHelper: SVNHelper;
@@ -36,7 +39,7 @@ export class VersionControlSection extends WebviewSection {
 
     /**
      * Detecta el repositorio en cada renderizado para que la vista refleje el
-     * proyecto abierto. Si no se reconoce Git ni SVN no se crean botones.
+     * proyecto abierto. Sin repositorio ofrece los controles iniciales de descarga.
      *
      * @returns Marcado HTML correspondiente al repositorio detectado.
      */
@@ -60,21 +63,53 @@ export class VersionControlSection extends WebviewSection {
 
         return sectionMarkup(
             'Version control',
-            '<p class="repository-kind">No se ha reconocido este directorio como un proyecto GIT o SVN.</p>',
+            [
+                '<p class="repository-kind">No se ha reconocido este directorio como un proyecto GIT o SVN.</p>',
+                WebviewControls.setLabelledInput(
+                    'URL Repositorio',
+                    VersionControlSection.repositoryInputId,
+                    '',
+                    'https://servidor/ruta/del/repositorio'
+                ),
+                WebviewControls.setButtonWithInput(
+                    `${this.id}.svn.checkout`,
+                    'SVN checkout',
+                    VersionControlSection.repositoryInputId,
+                    { variant: 'primary', icon: 'download' }
+                ),
+                WebviewControls.setButtonWithInput(
+                    `${this.id}.git.clone`,
+                    'GIT clone',
+                    VersionControlSection.repositoryInputId,
+                    { variant: 'primary', icon: 'download' }
+                )
+            ].join(''),
             { icon: 'source-control', status: 'Not detected', statusTone: 'warning' }
         );
     }
 
     /**
-     * Enruta exclusivamente al helper del repositorio detectado. El prefijo
-     * impide que una acción SVN pueda ejecutarse mientras la vista está en Git,
-     * manteniendo el mismo aislamiento para las acciones Git.
+     * Enruta al helper del repositorio detectado. Cuando no hay repositorio,
+     * solo permite el checkout SVN o el clone Git de un proyecto nuevo.
      *
      * @param action Acción con el prefijo del sistema de control de versiones.
      * @param value Valor opcional recibido desde un control del Webview.
      * @returns `true` si el helper activo reconoce la acción; en caso contrario, `false`.
      */
     public async handleAction(action: string, value?: string): Promise<boolean> {
+        if (this.activeRepository === 'none' && (action === 'svn.checkout' || action === 'git.clone')) {
+            const root = WorkingDirectoryControl.current();
+            if (!root) {
+                void vscode.window.showWarningMessage('Abre primero una carpeta de trabajo.');
+                return true;
+            }
+            if (action === 'svn.checkout') {
+                this.svnHelper.setWorkingCopyRoot(root);
+                return this.svnHelper.handleAction('checkout', value);
+            }
+            this.gitHelper.setRepositoryRoot(root);
+            return this.gitHelper.handleAction('clone', value);
+        }
         if (this.activeRepository === 'svn' && action.startsWith('svn.')) {
             return this.svnHelper.handleAction(action.slice('svn.'.length), value);
         }
@@ -137,13 +172,15 @@ export class VersionControlSection extends WebviewSection {
      * @returns Tipo de repositorio detectado o `none` si no hay marcador en la raíz.
      */
     private async detectWorkspaceRoot(folder: vscode.WorkspaceFolder): Promise<RepositoryKind> {
-        if (await exists(vscode.Uri.joinPath(folder.uri, '.git'))) {
-            this.gitHelper.setRepositoryRoot(folder.uri);
-            return 'git';
-        }
+        // La working copy de la carpeta abierta prevalece sobre un marcador Git residual.
         if (await exists(vscode.Uri.joinPath(folder.uri, '.svn'))) {
             this.svnHelper.setWorkingCopyRoot(folder.uri);
             return 'svn';
+        }
+        if (await exists(vscode.Uri.joinPath(folder.uri, '.git'))
+            && await GITHelper.isRepositoryRoot(folder.uri)) {
+            this.gitHelper.setRepositoryRoot(folder.uri);
+            return 'git';
         }
         return 'none';
     }

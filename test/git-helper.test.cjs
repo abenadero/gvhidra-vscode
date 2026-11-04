@@ -37,7 +37,7 @@ const vscode = {
             return terminal;
         }
     },
-    workspace: { fs: { stat: uri => stat(uri.fsPath) }, workspaceFolders: [] },
+    workspace: { fs: { stat: uri => stat(uri.fsPath) }, workspaceFolders: [], findFiles: async () => [] },
     env: { openExternal: async uri => { openedUrls.push(uri.toString()); return true; } },
     commands: { executeCommand: async (command, uri) => {
         if (command === 'vscode.openFolder') openedFolders.push(uri);
@@ -353,4 +353,62 @@ test('coordinator forwards the URL and uses the detected Git root in a multi-roo
     assert.equal(terminals.at(-1).options.cwd.fsPath, f.local);
     await runLastTerminal();
     assert.equal(await git(f.local, 'rev-parse', 'HEAD'), f.remoteHead);
+});
+
+test('a plain folder shows an empty URL and both download buttons, allowing a Git clone', async t => {
+    const f = await fixture(t);
+    const empty = path.join(f.root, 'empty');
+    await mkdir(empty);
+    const context = makeContext();
+    const section = new VersionControlSection(context, () => {});
+    // A previously detected repository must not remain the context for this download.
+    vscode.workspace.workspaceFolders = [{ uri: fileUri(f.local) }];
+    assert.match(await section.render(), /Git active/);
+    vscode.workspace.workspaceFolders = [{ uri: fileUri(empty) }];
+    const html = await section.render();
+    assert.match(html, /id="repository-url"\s+type="text"\s+value=""\s+placeholder="https:\/\//);
+    assert.match(html, /SVN checkout/);
+    assert.match(html, /GIT clone/);
+    assert.equal((html.match(/data-input-id="repository-url"/g) || []).length, 2);
+    assert.equal((html.match(/<button\b/g) || []).length, 2);
+    for (const action of ['git.update', 'git.createTag', 'git.switchBranch', 'svn.update', 'svn.commit', 'svn.resetCredentials']) {
+        assert.equal(await section.handleAction(action, f.selected), false);
+    }
+    for (const action of ['git.clone', 'svn.checkout']) {
+        assert.equal(await section.handleAction(action, ' '), true);
+    }
+    assert.equal(taskHost.runs.length, 0);
+    answers = ['clone-from-plain-folder'];
+    assert.equal(await section.handleAction('git.clone', f.selected), true);
+    const clone = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'clone-from-plain-folder');
+    assert.equal(await git(clone, 'rev-parse', 'HEAD'), f.remoteHead);
+    assert.deepEqual(openedFolders.map(uri => uri.fsPath), [clone]);
+    assert.equal(context.workspaceState.get(`gvhidra.gitRepository.${fileUri(empty).toString()}`), f.selected);
+});
+
+test('an empty .git in an opened child folder never selects the parent repository or URL', async t => {
+    const f = await fixture(t);
+    const child = path.join(f.local, 'htdocs', 'crc');
+    await mkdir(path.join(child, '.git'), { recursive: true });
+    // Git itself falls back to the parent, reproducing the misleading URL in the UI.
+    assert.equal(await git(child, 'rev-parse', '--show-toplevel'), f.local);
+    vscode.workspace.workspaceFolders = [{ uri: fileUri(child) }];
+    const section = new VersionControlSection(makeContext(), () => {});
+    const html = await section.render();
+    assert.match(html, /Not detected/);
+    assert.match(html, /id="repository-url"\s+type="text"\s+value=""/);
+    assert.doesNotMatch(html, /Git active/);
+    assert.equal(await section.handleAction('git.update', f.selected), false);
+    assert.equal(terminals.length, 0);
+});
+
+test('a Git worktree with a .git file remains a valid repository root', async t => {
+    const f = await fixture(t);
+    const worktree = path.join(f.root, 'worktree');
+    await git(f.local, 'worktree', 'add', '-b', 'worktree-test', worktree);
+    assert.equal((await stat(path.join(worktree, '.git'))).isFile(), true);
+    vscode.workspace.workspaceFolders = [{ uri: fileUri(worktree) }];
+    const html = await new VersionControlSection(makeContext(), () => {}).render();
+    assert.match(html, /Git active/);
+    assert.ok(html.includes(f.origin.replace(/'/g, '&#39;')));
 });

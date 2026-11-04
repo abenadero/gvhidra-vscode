@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WebviewControls } from '../../webview/components/WebviewControls';
@@ -17,6 +18,26 @@ export class GITHelper {
     private static readonly commandPrefix = 'version-control.git';
     private static readonly repositoryInputId = 'git-repository-url';
     private repositoryRoot?: vscode.Uri;
+
+    /** Evita confundir una carpeta .git vacía con el repositorio de un ancestro. */
+    public static async isRepositoryRoot(root: vscode.Uri): Promise<boolean> {
+        try {
+            const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
+                cwd: root.fsPath,
+                timeout: 10_000,
+                windowsHide: true
+            });
+            const [requestedRoot, detectedRoot] = await Promise.all([
+                realpath(root.fsPath),
+                realpath(stdout.trim())
+            ]);
+            return process.platform === 'win32'
+                ? requestedRoot.toLowerCase() === detectedRoot.toLowerCase()
+                : requestedRoot === detectedRoot;
+        } catch {
+            return false;
+        }
+    }
 
     public constructor(
         private readonly context: vscode.ExtensionContext,

@@ -401,3 +401,44 @@ test('coordinator accepts a unique nested SVN working copy and avoids ambiguous 
     assert.equal(await section.handleAction('svn.update', f.branch), false);
     assert.equal(terminals.length, 0);
 });
+
+test('a plain folder can start SVN checkout through the shared URL control', async () => {
+    const f = await fixture();
+    const empty = path.join(sandbox, 'empty');
+    await mkdir(empty);
+    const context = makeContext();
+    const section = new VersionControlSection(context, () => {});
+    assert.match(await section.render(), /SVN active/);
+    openFolder(empty);
+    assert.match(await section.render(), /SVN checkout/);
+    answers = ['checkout-from-plain-folder', 'demo-user', 'demo-password'];
+    assert.equal(await section.handleAction('svn.checkout', f.branch), true);
+    const destination = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'checkout-from-plain-folder');
+    assert.equal(await svn(destination, 'info', '--show-item', 'url'), f.branch);
+    assert.equal(await readFile(path.join(destination, 'file.txt'), 'utf8'), 'from selected URL\n');
+    assert.deepEqual(openedFolders.map(uri => uri.fsPath), [destination]);
+    assert.equal(context.workspaceState.get(`gvhidra.svnRepository.${fileUri(empty).toString()}`), f.branch);
+    assert.equal(await svn(f.local, 'info', '--show-item', 'url'), f.trunk);
+});
+
+test('the opened SVN working copy wins over an empty .git and a Git repository two folders above', async () => {
+    const f = await fixture();
+    const gitParent = path.dirname(path.dirname(f.local));
+    const parentUrl = 'https://gitlab.example.com/parent/project.git';
+    await exec('git', ['init', '--initial-branch=main', gitParent], { timeout: 10000 });
+    await exec('git', ['-C', gitParent, 'remote', 'add', 'origin', parentUrl], { timeout: 10000 });
+    await mkdir(path.join(f.local, '.git'));
+    const { stdout } = await exec('git', ['-C', f.local, 'rev-parse', '--show-toplevel'], { timeout: 10000 });
+    assert.equal(stdout.trim(), gitParent);
+    const section = new VersionControlSection(makeContext(), () => {});
+    const html = await section.render();
+    assert.match(html, /SVN active/);
+    assert.ok(html.includes(f.trunk.replace(/'/g, '&#39;')));
+    assert.doesNotMatch(html, /Git active/);
+    assert.equal(html.includes(parentUrl), false);
+    assert.equal(await section.handleAction('git.update', parentUrl), false);
+    assert.equal(await section.handleAction('svn.update', f.branch), true);
+    assert.equal(terminals.at(-1).options.cwd.fsPath, f.local);
+    await runLastTerminal();
+    assert.equal(await svn(f.local, 'info', '--show-item', 'url'), f.branch);
+});
