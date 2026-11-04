@@ -2,20 +2,26 @@ const assert = require('node:assert/strict');
 const { execFile } = require('node:child_process');
 const { mkdtemp, mkdir, readFile, rm, stat, writeFile } = require('node:fs/promises');
 const Module = require('node:module');
-const { tmpdir } = require('node:os');
+const os = require('node:os');
+const { tmpdir } = os;
 const path = require('node:path');
 const { test, beforeEach } = require('node:test');
 const { promisify } = require('node:util');
 const { pathToFileURL } = require('node:url');
+const { createTaskHost } = require('./support/task-host.cjs');
 
 const exec = promisify(execFile);
-let terminals, warnings, openedUrls, answers, destination;
+let terminals, warnings, errors, openedUrls, openedFolders, answers, testHome;
+const taskHost = createTaskHost(execution => exec(execution.process, execution.args, {
+    ...execution.options, timeout: 10000
+}));
 
 function fileUri(fsPath) {
     return { fsPath, scheme: 'file', toString: () => pathToFileURL(fsPath).toString() };
 }
 
 const vscode = {
+    ...taskHost.api,
     Uri: {
         file: fileUri,
         joinPath: (uri, ...parts) => fileUri(path.join(uri.fsPath, ...parts)),
@@ -23,8 +29,8 @@ const vscode = {
     },
     window: {
         showWarningMessage: async message => { warnings.push(message); },
+        showErrorMessage: async message => { errors.push(message); },
         showInputBox: async () => answers.shift(),
-        showOpenDialog: async () => destination,
         createTerminal: options => {
             const terminal = { options, show() {}, sendText(command) { this.command = command; } };
             terminals.push(terminal);
@@ -32,23 +38,32 @@ const vscode = {
         }
     },
     workspace: { fs: { stat: uri => stat(uri.fsPath) }, workspaceFolders: [] },
-    env: { openExternal: async uri => { openedUrls.push(uri.toString()); return true; } }
+    env: { openExternal: async uri => { openedUrls.push(uri.toString()); return true; } },
+    commands: { executeCommand: async (command, uri) => {
+        if (command === 'vscode.openFolder') openedFolders.push(uri);
+    } }
 };
 
 const originalLoad = Module._load;
 Module._load = function (name, ...args) {
+    if (name === 'node:os') return { ...os, homedir: () => testHome };
     return name === 'vscode' ? vscode : originalLoad.call(this, name, ...args);
 };
 const { GITHelper } = require('../out/sections/version-control/GITHelper');
 const { VersionControlSection } = require('../out/sections/version-control/VersionControlSection');
 Module._load = originalLoad;
 
-beforeEach(() => {
+beforeEach(async t => {
+    testHome = await mkdtemp(path.join(tmpdir(), 'gvhidra-git-home-'));
+    const directory = testHome;
+    t.after(() => rm(directory, { recursive: true, force: true }));
     terminals = [];
     warnings = [];
+    errors = [];
     openedUrls = [];
+    openedFolders = [];
     answers = [];
-    destination = undefined;
+    taskHost.reset();
     vscode.workspace.workspaceFolders = [];
     vscode.window.activeTextEditor = undefined;
     vscode.workspace.getWorkspaceFolder = () => undefined;
@@ -128,16 +143,84 @@ test('the edited URL survives rendering and remains separate for each repository
     assert.equal(await git(f.local, 'remote', 'get-url', 'origin'), f.origin);
 });
 
-test('clone uses the edited URL and creates a repository under the selected folder', async t => {
+test('clone downloads into the named project under HOME/gvhidra/gvhidradev/htdocs and opens it', async t => {
     const f = await fixture(t);
-    const parent = path.join(f.root, 'clones');
-    await mkdir(parent);
-    destination = [fileUri(parent)];
+    const name = "Proyecto de prueba's";
+    const clone = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name);
+    answers = [` ${name} `];
     await helperAt(f.local).handleAction('clone', f.selected);
-    await runLastTerminal();
-    const clone = path.join(parent, "selected repo's");
+    assert.equal(taskHost.results[0].exitCode, 0, taskHost.results[0].error?.message);
     assert.equal(await git(clone, 'rev-parse', 'HEAD'), f.remoteHead);
+    assert.equal(await git(clone, 'remote', 'get-url', 'origin'), f.selected);
     assert.equal(await readFile(path.join(clone, 'remote.txt'), 'utf8'), 'selected URL\n');
+    assert.deepEqual(openedFolders.map(uri => uri.fsPath), [clone]);
+    assert.equal(taskHost.listenerCount, 0);
+});
+
+test('clone rejects invalid project names and preserves an existing project folder', async () => {
+    const helper = helperAt(testHome);
+    for (const name of ['', ' ', '.', '..', '../outside', '/absolute', 'nested/project', 'nested\\project', 'bad\nname']) {
+        answers = [name];
+        await helper.handleAction('clone', '/unused.git');
+    }
+    const existing = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'existing');
+    await mkdir(existing, { recursive: true });
+    await writeFile(path.join(existing, 'keep.txt'), 'keep me');
+    answers = ['existing'];
+    await helper.handleAction('clone', '/unused.git');
+    assert.equal(await readFile(path.join(existing, 'keep.txt'), 'utf8'), 'keep me');
+    assert.equal(taskHost.runs.length, 0);
+    assert.equal(openedFolders.length, 0);
+    assert.match(errors.at(-1), /Ya existe/);
+});
+
+test('a failed clone never opens the folder and removes the empty reserved destination', async () => {
+    answers = ['failed-project'];
+    await helperAt(testHome).handleAction('clone', path.join(testHome, 'missing.git'));
+    assert.notEqual(taskHost.results[0].exitCode, 0);
+    assert.equal(openedFolders.length, 0);
+    assert.match(errors.at(-1), /no ha finalizado correctamente/);
+    await assert.rejects(stat(path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'failed-project')), { code: 'ENOENT' });
+    assert.equal(taskHost.listenerCount, 0);
+});
+
+test('task startup failures and cancellation before process start do not open a project', async () => {
+    const helper = helperAt(testHome);
+    taskHost.startError = new Error('Unable to start task');
+    answers = ['not-started'];
+    await helper.handleAction('clone', '/unused.git');
+    assert.match(errors.at(-1), /No se pudo iniciar/);
+    assert.equal(taskHost.listenerCount, 0);
+    taskHost.startError = undefined;
+    taskHost.endWithoutProcess = true;
+    answers = ['cancelled-project'];
+    await helper.handleAction('clone', '/unused.git');
+    assert.equal(openedFolders.length, 0);
+    assert.equal(taskHost.listenerCount, 0);
+    for (const name of ['not-started', 'cancelled-project']) {
+        await assert.rejects(stat(path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name)), { code: 'ENOENT' });
+    }
+});
+
+test('clone waits for its own successful task completion before opening the folder', async t => {
+    const f = await fixture(t);
+    let started, release;
+    const start = new Promise(resolve => { started = resolve; });
+    const pending = new Promise(resolve => { release = resolve; });
+    taskHost.beforeRun = async () => { started(); await pending; };
+    answers = ['wait-for-clone'];
+    const download = helperAt(f.local).handleAction('clone', f.selected);
+    await start;
+    const openedBeforeCompletion = openedFolders.length;
+    taskHost.emitProcessEnd({ execution: { task: { definition: { runId: 'other-task' } } }, exitCode: 0 });
+    await Promise.resolve();
+    const openedAfterUnrelatedTask = openedFolders.length;
+    release();
+    await download;
+    assert.equal(openedBeforeCompletion, 0);
+    assert.equal(openedAfterUnrelatedTask, 0);
+    assert.equal(openedFolders.length, 1);
+    assert.equal(taskHost.listenerCount, 0);
 });
 
 test('update uses the selected URL even when origin points elsewhere, and rejects divergence', async t => {

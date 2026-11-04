@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
+import { createProjectDirectory, runProjectCheckout } from './ProjectCheckout';
 
 const execFileAsync = promisify(execFile);
 
@@ -114,22 +115,17 @@ export class GITHelper {
         return { url, root };
     }
 
-    /** Git crea una subcarpeta con el nombre del repositorio en el destino elegido. */
+    /** Descarga la URL en el nuevo proyecto de htdocs y lo abre cuando termina. */
     private async clone(value?: string): Promise<void> {
         const repository = await this.repositoryFromInput(value);
         if (!repository) {
             return;
         }
-        const destination = await vscode.window.showOpenDialog({
-            title: 'Selecciona la carpeta donde se creará el clon del repositorio',
-            defaultUri: repository.root,
-            canSelectFiles: false,
-            canSelectFolders: true,
-            canSelectMany: false,
-            openLabel: 'Clonar aquí'
-        });
-        if (destination?.[0]) {
-            this.runTerminal(`git clone -- ${shellQuote(repository.url)}`, destination[0]);
+        const destination = await createProjectDirectory('Clonar desde URL');
+        if (destination) {
+            await runProjectCheckout(
+                'git', ['clone', '--', repository.url, destination.fsPath], destination, 'Clonar proyecto'
+            );
         }
     }
 

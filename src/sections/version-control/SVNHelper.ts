@@ -1,12 +1,13 @@
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WorkingDirectoryControl } from '../../common/WorkingDirectoryControl';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
+import { createProjectDirectory, discardEmptyProjectDirectory, runProjectCheckout } from './ProjectCheckout';
 
 const execFileAsync = promisify(execFile);
 
@@ -252,10 +253,10 @@ export class SVNHelper {
     }
 
     /**
-     * Ejecuta un checkout sobre el directorio raíz abierto en VS Code.
+     * Descarga la URL en un proyecto nuevo de htdocs y lo abre al finalizar.
      *
      * @param url URL del repositorio que se desea descargar.
-     * @returns Promesa que finaliza tras abrir la terminal o cancelar la operación.
+     * @returns Promesa que finaliza tras la descarga y apertura, o al cancelar.
      */
     private async checkout(url?: string): Promise<void> {
         const repositoryUrl = await this.repositoryFromInput(url);
@@ -263,15 +264,26 @@ export class SVNHelper {
             return;
         }
 
-        const credentials = await this.promptAndStoreProjectCredentials(
-            WorkingDirectoryControl.current()?.fsPath
+        const destination = await createProjectDirectory('Checkout desde URL');
+        if (!destination) {
+            return;
+        }
+        // El proyecto nuevo todavía no está abierto en el workspace.
+        const credentials = await this.promptAndStoreCredentials(
+            join(homedir(), '.subversion', 'auth', basename(destination.fsPath), 'svn-credentials')
         );
         if (!credentials) {
+            await discardEmptyProjectDirectory(destination);
             return;
         }
 
-        await this.runTerminal(
-            `svn checkout ${svnAuthenticationOptions(credentials)} ${shellQuote(repositoryUrl)} .`
+        await runProjectCheckout(
+            'svn',
+            ['checkout', '--non-interactive', '--no-auth-cache',
+                '--username', credentials.username, '--password', credentials.password,
+                '--', repositoryUrl, destination.fsPath],
+            destination,
+            'Checkout del proyecto'
         );
     }
 
@@ -444,6 +456,11 @@ export class SVNHelper {
             return undefined;
         }
 
+        return this.promptAndStoreCredentials(credentialsFile);
+    }
+
+    /** Comparte el guardado entre proyectos abiertos y el nuevo destino del checkout. */
+    private async promptAndStoreCredentials(credentialsFile: string): Promise<SvnCredentials | undefined> {
         const projectCredentialsDirectory = dirname(credentialsFile);
         try {
             await mkdir(projectCredentialsDirectory, { recursive: true });

@@ -8,17 +8,24 @@ const path = require('node:path');
 const { test, beforeEach } = require('node:test');
 const { promisify } = require('node:util');
 const { pathToFileURL } = require('node:url');
+const { createTaskHost } = require('./support/task-host.cjs');
 
 const exec = promisify(childProcess.execFile);
 const useDefault = Symbol('Use the input default value');
 let sandbox, testHome, configDirectory;
-let terminals, warnings, errors, information, inputs, answers, confirmations, commands, nestedDatabases;
+let terminals, warnings, errors, information, inputs, answers, confirmations, commands, openedFolders, nestedDatabases;
+const taskHost = createTaskHost(execution => {
+    const args = execution.process === 'svn'
+        ? ['--config-dir', configDirectory, ...execution.args] : execution.args;
+    return exec(execution.process, args, { ...execution.options, timeout: 10000 });
+});
 
 function fileUri(fsPath) {
     return { fsPath, scheme: 'file', toString: () => pathToFileURL(fsPath).toString() };
 }
 
 const vscode = {
+    ...taskHost.api,
     Uri: {
         file: fileUri,
         joinPath: (uri, ...parts) => fileUri(path.join(uri.fsPath, ...parts))
@@ -46,7 +53,10 @@ const vscode = {
         workspaceFolders: [],
         findFiles: async () => nestedDatabases
     },
-    commands: { executeCommand: async command => { commands.push(command); } }
+    commands: { executeCommand: async (command, uri) => {
+        commands.push(command);
+        if (command === 'vscode.openFolder') openedFolders.push(uri);
+    } }
 };
 
 // Isolate both the helper's svn info process and its credential files without changing HOME.
@@ -90,6 +100,8 @@ beforeEach(async t => {
     answers = [];
     confirmations = [];
     commands = [];
+    openedFolders = [];
+    taskHost.reset();
     nestedDatabases = [];
     vscode.workspace.workspaceFolders = [];
     vscode.window.activeTextEditor = undefined;
@@ -167,20 +179,54 @@ test('renders the working-copy URL, editable repository input and SVN controls',
     assert.equal(await helper.handleAction('unknownAction', f.trunk), false);
 });
 
-test('checkout downloads the entered URL and stores isolated project credentials', async () => {
+test('checkout downloads into the named htdocs project, stores its credentials and opens it', async () => {
     const f = await fixture();
-    const destination = path.join(sandbox, 'htdocs', 'department', 'checkout');
-    await mkdir(destination);
-    openFolder(destination);
-    answers = ['demo-user', "password's=literal"];
-    await helperAt(destination).handleAction('checkout', ` ${f.branch} `);
-    await runLastTerminal();
+    const name = "Checkout de prueba's";
+    const destination = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name);
+    answers = [` ${name} `, 'demo-user', "password's=literal"];
+    await helperAt(f.local).handleAction('checkout', ` ${f.branch} `);
+    assert.equal(taskHost.results[0].exitCode, 0, taskHost.results[0].error?.message);
     assert.equal(await svn(destination, 'info', '--show-item', 'url'), f.branch);
     assert.equal(await readFile(path.join(destination, 'file.txt'), 'utf8'), 'from selected URL\n');
-    const credentials = path.join(testHome, '.subversion', 'auth', 'department', 'checkout', 'svn-credentials');
+    const credentials = path.join(testHome, '.subversion', 'auth', name, 'svn-credentials');
     assert.equal(await readFile(credentials, 'utf8'), "username=demo-user\npassword=password's=literal\n");
     assert.equal((await stat(credentials)).mode & 0o777, 0o600);
-    assert.equal(inputs[1].password, true);
+    assert.equal(inputs[2].password, true);
+    await assert.rejects(stat(f.credentialsFile), { code: 'ENOENT' });
+    assert.deepEqual(openedFolders.map(uri => uri.fsPath), [destination]);
+    assert.equal(taskHost.listenerCount, 0);
+});
+
+test('checkout rejects invalid project names and preserves an existing destination', async () => {
+    const helper = helperAt(sandbox);
+    for (const name of ['', '..', '../outside', '/absolute', 'nested/project', 'nested\\project', 'bad\nname']) {
+        answers = [name];
+        await helper.handleAction('checkout', 'file:///unused/trunk');
+    }
+    const destination = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'existing');
+    await mkdir(destination, { recursive: true });
+    await writeFile(path.join(destination, 'keep.txt'), 'keep me');
+    answers = ['existing'];
+    await helper.handleAction('checkout', 'file:///unused/trunk');
+    assert.equal(await readFile(path.join(destination, 'keep.txt'), 'utf8'), 'keep me');
+    assert.equal(taskHost.runs.length, 0);
+    assert.equal(openedFolders.length, 0);
+    assert.match(errors.at(-1), /Ya existe/);
+    await assert.rejects(stat(path.join(testHome, '.subversion')), { code: 'ENOENT' });
+});
+
+test('failed checkout does not open the project or remove files from a partial download', async () => {
+    const f = await fixture();
+    const destination = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'failed-checkout');
+    answers = ['failed-checkout', 'demo-user', 'demo-password'];
+    taskHost.beforeRun = () => writeFile(path.join(destination, 'partial.txt'), 'keep partial data');
+    await helperAt(f.local).handleAction('checkout', `${f.url}/missing`);
+    assert.notEqual(taskHost.results[0].exitCode, 0);
+    assert.equal(openedFolders.length, 0);
+    assert.match(errors.at(-1), /no ha finalizado correctamente/);
+    assert.equal(await readFile(path.join(destination, 'partial.txt'), 'utf8'), 'keep partial data');
+    assert.equal(await svn(f.local, 'info', '--show-item', 'url'), f.trunk);
+    assert.equal(taskHost.listenerCount, 0);
 });
 
 test('update switches the working copy to the entered branch URL', async () => {
@@ -304,15 +350,21 @@ test('empty URLs and cancelled prompts leave the working copy and repository unc
     for (const action of ['checkout', 'update', 'commit', 'createTag']) {
         await helper.handleAction(action, ' ');
     }
-    await helper.handleAction('checkout', f.trunk);
-    answers = ['demo-user', undefined];
-    await helper.handleAction('checkout', f.trunk);
+    for (const cancelled of [[undefined], ['cancelled-user', undefined], ['cancelled-password', 'demo-user', undefined]]) {
+        answers = cancelled;
+        await helper.handleAction('checkout', f.trunk);
+    }
+    for (const name of ['cancelled-user', 'cancelled-password']) {
+        await assert.rejects(stat(path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name)), { code: 'ENOENT' });
+    }
     await helper.handleAction('commit', f.trunk);
     for (const cancelled of [[undefined], ['release-1', undefined], ['release-1', useDefault, undefined]]) {
         answers = cancelled;
         await helper.handleAction('createTag', f.trunk);
     }
     assert.equal(terminals.length, 0);
+    assert.equal(taskHost.runs.length, 0);
+    assert.equal(openedFolders.length, 0);
     assert.equal(await svn(sandbox, 'info', '--show-item', 'revision', f.url), revision);
     await assert.rejects(stat(f.credentialsFile), { code: 'ENOENT' });
 });
