@@ -15,14 +15,14 @@ type RepositoryKind = 'git' | 'svn' | 'none';
 export class VersionControlSection extends WebviewSection {
     public readonly id = 'version-control';
 
-    private readonly gitHelper = new GITHelper();
+    private readonly gitHelper: GITHelper;
     private readonly svnHelper: SVNHelper;
     private activeRepository: RepositoryKind = 'none';
 
     /**
      * Crea los helpers especializados en Git y SVN.
      *
-     * @param context Contexto de la extensión que necesita el helper SVN.
+     * @param context Contexto de la extensión compartido por los helpers.
      * @param requestRender Callback para solicitar el refresco de la vista.
      */
     public constructor(
@@ -30,6 +30,7 @@ export class VersionControlSection extends WebviewSection {
         requestRender: () => void
     ) {
         super();
+        this.gitHelper = new GITHelper(context, requestRender);
         this.svnHelper = new SVNHelper(context, requestRender);
     }
 
@@ -50,7 +51,7 @@ export class VersionControlSection extends WebviewSection {
             });
         }
         if (this.activeRepository === 'git') {
-            return sectionMarkup('Version control', this.gitHelper.render(), {
+            return sectionMarkup('Version control', await this.gitHelper.render(), {
                 icon: 'source-control',
                 status: 'Git active',
                 statusTone: 'success'
@@ -67,7 +68,7 @@ export class VersionControlSection extends WebviewSection {
     /**
      * Enruta exclusivamente al helper del repositorio detectado. El prefijo
      * impide que una acción SVN pueda ejecutarse mientras la vista está en Git,
-     * y deja preparado el mismo aislamiento para futuras acciones Git.
+     * manteniendo el mismo aislamiento para las acciones Git.
      *
      * @param action Acción con el prefijo del sistema de control de versiones.
      * @param value Valor opcional recibido desde un control del Webview.
@@ -78,7 +79,7 @@ export class VersionControlSection extends WebviewSection {
             return this.svnHelper.handleAction(action.slice('svn.'.length), value);
         }
         if (this.activeRepository === 'git' && action.startsWith('git.')) {
-            return this.gitHelper.handleAction(action.slice('git.'.length));
+            return this.gitHelper.handleAction(action.slice('git.'.length), value);
         }
         return false;
     }
@@ -137,6 +138,7 @@ export class VersionControlSection extends WebviewSection {
      */
     private async detectWorkspaceRoot(folder: vscode.WorkspaceFolder): Promise<RepositoryKind> {
         if (await exists(vscode.Uri.joinPath(folder.uri, '.git'))) {
+            this.gitHelper.setRepositoryRoot(folder.uri);
             return 'git';
         }
         if (await exists(vscode.Uri.joinPath(folder.uri, '.svn'))) {
