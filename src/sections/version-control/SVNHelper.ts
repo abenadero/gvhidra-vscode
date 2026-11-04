@@ -133,6 +133,11 @@ export class SVNHelper {
                 `${SVNHelper.commandPrefix}.history`,
                 'Mostrar historial del fichero activo',
                 { variant: 'ghost', icon: 'history' }
+            ),
+            WebviewControls.setButton(
+                `${SVNHelper.commandPrefix}.sourceControl`,
+                'Abrir Source Control',
+                { variant: 'ghost', icon: 'source-control', tooltip: 'Abre la vista Source Control de VS Code' }
             )
         ].join('');
     }
@@ -153,7 +158,8 @@ export class SVNHelper {
             createTag: () => this.createTag(value),
             manageProjectCredentials: () => this.manageProjectCredentials(value),
             history: () => this.showHistory(),
-            resetCredentials: () => this.resetCredentials()
+            resetCredentials: () => this.resetCredentials(),
+            sourceControl: async () => { await vscode.commands.executeCommand('workbench.view.scm'); }
         };
         const handler = actions[action];
         if (!handler) {
