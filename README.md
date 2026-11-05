@@ -75,7 +75,7 @@ Localiza el ejecutable de Codex incluido en la extensión OpenAI ChatGPT y muest
 
 | Elemento | Funcionalidad |
 | --- | --- |
-| **Instalar am-marketplace** | Registra el marketplace de plugins de Laberit desde `https://gitlab.laberit.com/am/ia/plugins/am-marketplace/codex.git`, utilizando la rama `main`. |
+| **Instalar am-marketplace** | Registra el marketplace de plugins de Laberit desde `https://gitlab.laberit.com/am/ia/plugins/am-marketplace/codex.git`, utilizando la rama `main`. Si Git necesita autenticación, solicita el usuario y la contraseña o token de GitLab (oculto) y reintenta la instalación. Las credenciales introducidas se utilizan solo durante esa instalación. |
 | **Instalar skills del am-marketplace** | Consulta los plugins disponibles en `am-marketplace`, muestra un selector e instala el elemento elegido mediante Codex. Requiere haber registrado el marketplace. |
 
 ## PHP CS Fixer

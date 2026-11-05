@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { sectionMarkup, WebviewSection } from '../WebviewSection';
+import { isGitAuthenticationError, promptForMarketplaceGitEnvironment } from './MarketplaceGitAuthentication';
 
 const execFileAsync = promisify(execFile);
 const MARKETPLACE_NAME = 'am-marketplace';
@@ -129,11 +130,23 @@ export class CodexSection extends WebviewSection {
         }
 
         try {
-            await runCodexWithProgress(
-                executable,
-                ['plugin', 'marketplace', 'add', MARKETPLACE_URL, '--ref', 'main'],
-                'Instalando am-marketplace…'
-            );
+            const args = ['plugin', 'marketplace', 'add', MARKETPLACE_URL, '--ref', 'main'];
+            const title = 'Instalando am-marketplace…';
+            try {
+                await runCodexWithProgress(executable, args, title, {
+                    ...process.env,
+                    GIT_TERMINAL_PROMPT: '0'
+                });
+            } catch (error) {
+                if (!isGitAuthenticationError(error)) {
+                    throw error;
+                }
+                const environment = await promptForMarketplaceGitEnvironment(MARKETPLACE_URL);
+                if (!environment) {
+                    return;
+                }
+                await runCodexWithProgress(executable, args, title, environment);
+            }
             void vscode.window.showInformationMessage('am-marketplace se ha instalado correctamente.');
             this.requestRender();
         } catch (error) {
@@ -282,16 +295,19 @@ async function readCodexVersion(executable: string): Promise<string | undefined>
  * @param executable Ruta del ejecutable de Codex.
  * @param args Argumentos que se pasan a la CLI.
  * @param title Texto visible en la notificación de progreso.
+ * @param environment Entorno del proceso, incluidas las credenciales temporales de Git.
  * @returns Salidas estándar y de error producidas por el proceso.
  */
 async function runCodexWithProgress(
     executable: string,
     args: string[],
-    title: string
+    title: string,
+    environment?: NodeJS.ProcessEnv
 ): Promise<{ stdout: string; stderr: string }> {
     return vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title },
         () => execFileAsync(executable, args, {
+            env: environment,
             timeout: 120_000,
             windowsHide: true,
             maxBuffer: 10 * 1024 * 1024
