@@ -6,6 +6,7 @@
 
 - Docker Container: gestión de contenedores.
 - Utils: limpieza de Zone.Identifier y acceso a logs PHP.
+- Git y SVN: último tag como placeholder.
 - Changelog.
 
 ### Solved Issues

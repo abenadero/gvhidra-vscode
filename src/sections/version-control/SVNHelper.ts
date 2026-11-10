@@ -347,6 +347,7 @@ export class SVNHelper {
         const tagName = await vscode.window.showInputBox({
             title: 'Create SVN TAG',
             prompt: 'Enter the tag name',
+            placeHolder: await this.getLatestTagName(repositoryUrl),
             ignoreFocusOut: true,
             validateInput: value => {
                 if (!value.trim()) {
@@ -386,6 +387,50 @@ export class SVNHelper {
         );
     }
 
+    /** Consulta la creación de los tags existentes, sin confundirla con modificaciones posteriores. */
+    private async getLatestTagName(sourceUrl: string): Promise<string | undefined> {
+        try {
+            const credentials = await this.readProjectCredentials();
+            const authentication = credentials
+                ? ['--username', credentials.username, '--password', credentials.password]
+                : [];
+            const readSvn = (args: string[], url: string) => execFileAsync('svn', [
+                ...args, '--non-interactive', '--no-auth-cache', ...authentication, '--', url
+            ], { cwd: this.workspaceRoot()?.fsPath, timeout: 10_000, windowsHide: true });
+            const tagsUrl = suggestedTagUrl(sourceUrl, '');
+            const { stdout } = await readSvn(['list', '--xml'], tagsUrl);
+            const tags = [...stdout.matchAll(/<entry\b[^>]*\bkind="dir"[^>]*>([\s\S]*?)<\/entry>/g)]
+                .map(([, entry]) => ({
+                    name: decodeXml(entry.match(/<name>([\s\S]*?)<\/name>/)?.[1] ?? ''),
+                    changedRevision: Number(entry.match(/<commit\b[^>]*\brevision="(\d+)"/)?.[1] ?? 0)
+                }))
+                .filter(tag => tag.name)
+                .sort((left, right) => right.changedRevision - left.changedRevision);
+
+            let latestTag: string | undefined;
+            let latestRevision = 0;
+            for (const tag of tags) {
+                // La creación nunca puede ser posterior a la última modificación.
+                if (tag.changedRevision <= latestRevision) {
+                    break;
+                }
+                const { stdout: log } = await readSvn(
+                    ['log', '--xml', '--stop-on-copy', '--limit', '1', '-r', '0:HEAD'],
+                    `${tagsUrl}${encodeURIComponent(tag.name)}@`
+                );
+                const revision = Number(log.match(/<logentry\b[^>]*\brevision="(\d+)"/)?.[1] ?? 0);
+                if (revision > latestRevision) {
+                    latestRevision = revision;
+                    latestTag = tag.name;
+                }
+            }
+            return latestTag;
+        } catch {
+            // El placeholder es opcional: una consulta fallida no impide crear un tag.
+            return undefined;
+        }
+    }
+
     /**
      * Muestra el log SVN del fichero activo en una terminal.
      *
@@ -420,19 +465,9 @@ export class SVNHelper {
      * @returns Opciones de autenticación escapadas, o una cadena vacía para el modo interactivo.
      */
     private async authenticationOptionsForProject(): Promise<string> {
-        const credentialsFile = this.projectCredentialsFile(
-            WorkingDirectoryControl.current()?.fsPath,
-            false
-        );
-        if (credentialsFile) {
-            try {
-                const credentials = parseCredentials(await readFile(credentialsFile, 'utf8'));
-                if (credentials) {
-                    return `${svnAuthenticationOptions(credentials)} `;
-                }
-            } catch {
-                // La ausencia o ilegibilidad se trata igual: SVN mantiene su prompt interactivo.
-            }
+        const credentials = await this.readProjectCredentials();
+        if (credentials) {
+            return `${svnAuthenticationOptions(credentials)} `;
         }
 
         void vscode.window.showWarningMessage(
@@ -440,6 +475,22 @@ export class SVNHelper {
             + 'El comando las solicitará manualmente en la terminal.'
         );
         return '';
+    }
+
+    /** Lee las credenciales también para consultas opcionales que no deben mostrar avisos. */
+    private async readProjectCredentials(): Promise<SvnCredentials | undefined> {
+        const credentialsFile = this.projectCredentialsFile(
+            WorkingDirectoryControl.current()?.fsPath,
+            false
+        );
+        if (credentialsFile) {
+            try {
+                return parseCredentials(await readFile(credentialsFile, 'utf8'));
+            } catch {
+                // La ausencia o ilegibilidad se trata igual: SVN mantiene su prompt interactivo.
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -800,6 +851,17 @@ function normalizeSvnUrl(url: string): string {
     return url.trim().replace(/\/+$/, '');
 }
 
+/** Decodifica nombres de tags recibidos en la salida XML de SVN. */
+function decodeXml(value: string): string {
+    const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+    return value.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_, entity: string) =>
+        entity.startsWith('#')
+            ? String.fromCodePoint(entity[1].toLowerCase() === 'x'
+                ? parseInt(entity.slice(2), 16) : Number(entity.slice(1)))
+            : entities[entity]
+    );
+}
+
 /**
  * Obtiene todos los segmentos situados a la derecha del último `htdocs`.
  *
@@ -824,7 +886,7 @@ function projectPathAfterHtdocs(path: string): string[] | undefined {
 function suggestedTagUrl(sourceUrl: string, tagName: string): string {
     const source = normalizeSvnUrl(sourceUrl);
     const conventionalBase = source.match(/^(.*)\/trunk(?:\/.*)?$/)?.[1]
-        ?? source.match(/^(.*)\/branches\/[^/]+(?:\/.*)?$/)?.[1];
+        ?? source.match(/^(.*)\/(?:branches|tags)\/[^/]+(?:\/.*)?$/)?.[1];
     if (conventionalBase) {
         return `${conventionalBase}/tags/${tagName}`;
     }

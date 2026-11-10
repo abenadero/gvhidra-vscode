@@ -173,7 +173,10 @@ export class GITHelper {
         if (!repository) {
             return;
         }
-        const tag = await this.promptRefName('Crear tag desde URL', 'Nombre del tag', 'tags');
+        const latestTag = await this.readGit(repository.root, [
+            'for-each-ref', '--sort=-creatordate', '--count=1', '--format=%(refname:strip=2)', 'refs/tags/'
+        ]);
+        const tag = await this.promptRefName('Crear tag desde URL', 'Nombre del tag', 'tags', latestTag);
         if (!tag) {
             return;
         }
@@ -239,10 +242,13 @@ export class GITHelper {
         await vscode.env.openExternal(vscode.Uri.parse(url));
     }
 
-    private async promptRefName(title: string, prompt: string, kind: 'heads' | 'tags'): Promise<string | undefined> {
+    private async promptRefName(
+        title: string, prompt: string, kind: 'heads' | 'tags', placeHolder?: string
+    ): Promise<string | undefined> {
         const value = await vscode.window.showInputBox({
             title,
             prompt,
+            placeHolder,
             ignoreFocusOut: true,
             validateInput: input => this.validateRefName(input, kind)
         });

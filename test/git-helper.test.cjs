@@ -11,7 +11,7 @@ const { pathToFileURL } = require('node:url');
 const { createTaskHost } = require('./support/task-host.cjs');
 
 const exec = promisify(execFile);
-let terminals, warnings, errors, openedUrls, openedFolders, answers, testHome;
+let terminals, warnings, errors, openedUrls, openedFolders, inputs, answers, testHome;
 const taskHost = createTaskHost(execution => exec(execution.process, execution.args, {
     ...execution.options, timeout: 10000
 }));
@@ -30,7 +30,7 @@ const vscode = {
     window: {
         showWarningMessage: async message => { warnings.push(message); },
         showErrorMessage: async message => { errors.push(message); },
-        showInputBox: async () => answers.shift(),
+        showInputBox: async options => { inputs.push(options); return answers.shift(); },
         createTerminal: options => {
             const terminal = { options, show() {}, sendText(command) { this.command = command; } };
             terminals.push(terminal);
@@ -62,6 +62,7 @@ beforeEach(async t => {
     errors = [];
     openedUrls = [];
     openedFolders = [];
+    inputs = [];
     answers = [];
     taskHost.reset();
     vscode.workspace.workspaceFolders = [];
@@ -286,6 +287,30 @@ test('tag is created from the remote source and only that tag is published to th
     await helper.handleAction('createTag', f.origin);
     await assert.rejects(runLastTerminal());
     assert.equal(await git(f.origin, 'tag', '--list'), '');
+});
+
+test('tag placeholder uses creation dates, preserves the full name and leaves the input empty', async t => {
+    const f = await fixture(t);
+    const commitTime = Number(await git(f.local, 'show', '-s', '--format=%ct', 'HEAD'));
+    await git(f.local, 'tag', 'lightweight');
+    for (const [name, offset] of [['z-release-9', 1], ['release/v1', 2]]) {
+        await exec('git', ['tag', '-a', name, '-m', name], {
+            cwd: f.local,
+            env: { ...process.env, GIT_COMMITTER_DATE: new Date((commitTime + offset) * 1000).toISOString() },
+            timeout: 10000
+        });
+    }
+    await helperAt(f.local).handleAction('createTag', f.selected);
+    assert.equal(inputs[0].placeHolder, 'release/v1');
+    assert.equal(inputs[0].value, undefined);
+    assert.equal(terminals.length, 0);
+
+    // Neither an empty repository nor a failed lookup should prevent the prompt.
+    await helperAt(f.origin).handleAction('createTag', f.origin);
+    assert.equal(inputs[1].placeHolder, undefined);
+    await helperAt(path.join(f.root, 'missing')).handleAction('createTag', f.selected);
+    assert.equal(inputs[2].placeHolder, undefined);
+    assert.equal(terminals.length, 0);
 });
 
 test('pipeline opens the project web URL for HTTPS, SCP and SSH clone URLs', async () => {

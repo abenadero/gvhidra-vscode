@@ -267,6 +267,7 @@ test('create tag copies the chosen remote URL, independently of local changes', 
     const helper = helperAt(f.local);
     await helper.handleAction('createTag', f.branch);
     const tagUrl = `${f.url}/tags/release-1`;
+    assert.equal(inputs[0].placeHolder, undefined);
     assert.equal(inputs[1].value, tagUrl);
     await runLastTerminal();
     assert.equal(await svn(sandbox, 'cat', `${tagUrl}/file.txt`), 'from selected URL');
@@ -274,6 +275,32 @@ test('create tag copies the chosen remote URL, independently of local changes', 
     assert.equal(await readFile(path.join(f.local, 'file.txt'), 'utf8'), 'uncommitted local change\n');
     await assert.rejects(stat(path.join(f.local, 'NEVER_EXECUTED')));
     assert.equal(await svn(sandbox, 'list', `${f.url}/tags`), 'release-1/');
+});
+
+test('tag placeholder uses the latest creation even after an older tag is modified', async () => {
+    const f = await fixture();
+    const oldTag = `${f.url}/tags/z-release-9`;
+    const latestName = 'release & 1';
+    const latestTag = `${f.url}/tags/${encodeURIComponent(latestName)}`;
+    await svn(sandbox, 'copy', f.trunk, oldTag, '-m', 'Create old tag');
+    await svn(sandbox, 'copy', f.branch, latestTag, '-m', 'Create latest tag');
+    const oldWorkingCopy = path.join(sandbox, 'old-tag');
+    await svn(sandbox, 'checkout', oldTag, oldWorkingCopy);
+    await writeFile(path.join(oldWorkingCopy, 'file.txt'), 'later modification\n');
+    await svn(oldWorkingCopy, 'propset', 'release-note', 'later modification', '.');
+    await svn(oldWorkingCopy, 'commit', '-m', 'Modify older tag');
+
+    const helper = helperAt(f.local);
+    for (const source of [f.trunk, f.branch, latestTag]) {
+        await helper.handleAction('createTag', source);
+        assert.equal(inputs.at(-1).placeHolder, latestName);
+        assert.equal(inputs.at(-1).value, undefined);
+    }
+    assert.equal(terminals.length, 0);
+    // A missing tags directory leaves creation available without a suggestion.
+    await helper.handleAction('createTag', `${f.url}/missing/trunk`);
+    assert.equal(inputs.at(-1).placeHolder, undefined);
+    assert.equal(terminals.length, 0);
 });
 
 test('history shows the active file log and rejects files outside the working copy', async () => {
