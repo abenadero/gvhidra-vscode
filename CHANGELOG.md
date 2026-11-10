@@ -11,6 +11,8 @@
 
 ### Solved Issues
 
+- Se excluyen las instrucciones del proyecto del VSIX.
+
 ## 0.0.1
 
 ### Features
