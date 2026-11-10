@@ -4,6 +4,7 @@ import { CodexSection } from '../sections/codex/CodexSection';
 import { DocumentationSection } from '../sections/documentation/DocumentationSection';
 import { DockerContainerSection } from '../sections/docker-container/DockerContainerSection';
 import { PhpCsFixerSection } from '../sections/php-cs-fixer/PhpCsFixerSection';
+import { UtilsSection } from '../sections/utils/UtilsSection';
 import { VersionControlSection } from '../sections/version-control/VersionControlSection';
 import { WebviewMessage, WebviewSection } from '../sections/WebviewSection';
 import { XDebug3Section } from '../sections/xdebug3/XDebug3Section';
@@ -27,6 +28,7 @@ export class GvhidraWebviewProvider implements vscode.WebviewViewProvider {
             new PhpCsFixerSection(),
             new XDebug3Section(),
             new DockerContainerSection(),
+            new UtilsSection(),
             new DocumentationSection()
         ];
     }

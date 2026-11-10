@@ -5,6 +5,7 @@
 ### Features
 
 - Docker Container: gestión de contenedores.
+- Utils: limpieza de Zone.Identifier y acceso a logs PHP.
 - Changelog.
 
 ### Solved Issues

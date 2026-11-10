@@ -78,7 +78,7 @@
     "compile": "tsc -p ./",
     "package": "vsce package --no-dependencies",
     "package:ls": "vsce ls --no-dependencies",
-    "test": "npm run compile && node --test test/git-helper.test.cjs test/svn-helper.test.cjs test/codex-section.test.cjs"
+    "test": "npm run compile && node --test test/git-helper.test.cjs test/svn-helper.test.cjs test/codex-section.test.cjs test/utils-section.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^18.19.130",

@@ -2,7 +2,7 @@
 
 GVHidra for VSCode es una extensión de Visual Studio Code ideada para apoyar los desarrollos **gvHidra en entornos de la Generalitat Valenciana (GVA)**. Se asume que se utiliza el entorno **gvhidradev dentro de WSL**, con el proyecto abierto en una ventana de VS Code conectada a esa distribución.
 
-La extensión reúne en un panel herramientas de control de versiones, integración con Codex, corrección de código PHP, configuración de Xdebug 3, control de contenedores Docker y accesos a documentación y servicios del entorno.
+La extensión reúne en un panel herramientas de control de versiones, integración con Codex, corrección de código PHP, configuración de Xdebug 3, control de contenedores Docker, utilidades y accesos a documentación y servicios del entorno.
 
 ## Entorno de trabajo
 
@@ -117,6 +117,18 @@ Controla los contenedores del entorno desde una sección con el icono de la ball
 | **Bajar Contenedores** | Ejecuta `docker compose down`. |
 
 Si el directorio no existe o no se puede iniciar la tarea, se muestra un mensaje de error. Los errores de Docker Compose se muestran en la terminal de la tarea.
+
+## Utils
+
+Utilidades que actúan sobre `~/gvhidra` del usuario de WSL, independientemente del proyecto abierto.
+
+| Elemento | Funcionalidad |
+| --- | --- |
+| **Delete zone identifiers** | Elimina todos los ficheros cuyo nombre termina en `:Zone.Identifier` de `~/gvhidra` y sus subdirectorios, incluidos los ocultos. No sigue enlaces simbólicos. Muestra el número de ficheros eliminados e informa de los errores si no puede completar el borrado. |
+| **Open PHP 7.4 error log** | Abre `~/gvhidra/gvhidradev/logs/php74/error.log` en una pestaña del editor de VS Code. |
+| **Open PHP 8.4 error log** | Abre `~/gvhidra/gvhidradev/logs/php84/error.log` en una pestaña del editor de VS Code. |
+
+Si un log no existe o no se puede leer, se muestra un mensaje de error.
 
 ## Documentation
 
