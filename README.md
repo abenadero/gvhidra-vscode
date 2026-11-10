@@ -158,12 +158,12 @@ npm run package:ls
 npm run package
 ```
 
-`package:ls` permite revisar los archivos que se incluirán. `package` limpia la compilación anterior, compila automáticamente la extensión y genera `gvhidra-vscode-0.0.1.vsix` en la raíz del repositorio. El paquete incluye el código compilado, los iconos, este README, el changelog y la licencia; excluye las fuentes TypeScript, las pruebas y las dependencias de desarrollo. La extensión no utiliza dependencias de ejecución de npm, por lo que el empaquetado omite su búsqueda.
+`package:ls` permite revisar los archivos que se incluirán. `package` limpia la compilación anterior, compila automáticamente la extensión y genera `gvhidra-vscode-0.0.2.vsix` en la raíz del repositorio. El paquete incluye el código compilado, los iconos, este README, el changelog y la licencia; excluye las fuentes TypeScript, las pruebas y las dependencias de desarrollo. La extensión no utiliza dependencias de ejecución de npm, por lo que el empaquetado omite su búsqueda.
 
 El VSIX se puede instalar desde **Extensions: Install from VSIX...** o con:
 
 ```bash
-code --install-extension ./gvhidra-vscode-0.0.1.vsix
+code --install-extension ./gvhidra-vscode-0.0.2.vsix
 ```
 
 ## Licencia
