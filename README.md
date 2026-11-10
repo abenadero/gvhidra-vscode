@@ -123,6 +123,8 @@ Las direcciones de **Manual** y **Wiki** se pueden ajustar en la configuración 
 
 ## Desarrollo y empaquetado
 
+Las novedades de la versión `0.0.2` se registran en [CHANGELOG.md](CHANGELOG.md).
+
 Para compilar y empaquetar la extensión se necesita Node.js 22 o posterior y npm. Las pruebas de control de versiones utilizan `git`, `svn` y `svnadmin`.
 
 ```bash
@@ -132,7 +134,7 @@ npm run package:ls
 npm run package
 ```
 
-`package:ls` permite revisar los archivos que se incluirán. `package` limpia la compilación anterior, compila automáticamente la extensión y genera `gvhidra-vscode-0.0.1.vsix` en la raíz del repositorio. El paquete incluye el código compilado, los iconos, este README y la licencia; excluye las fuentes TypeScript, las pruebas y las dependencias de desarrollo. La extensión no utiliza dependencias de ejecución de npm, por lo que el empaquetado omite su búsqueda.
+`package:ls` permite revisar los archivos que se incluirán. `package` limpia la compilación anterior, compila automáticamente la extensión y genera `gvhidra-vscode-0.0.1.vsix` en la raíz del repositorio. El paquete incluye el código compilado, los iconos, este README, el changelog y la licencia; excluye las fuentes TypeScript, las pruebas y las dependencias de desarrollo. La extensión no utiliza dependencias de ejecución de npm, por lo que el empaquetado omite su búsqueda.
 
 El VSIX se puede instalar desde **Extensions: Install from VSIX...** o con:
 
