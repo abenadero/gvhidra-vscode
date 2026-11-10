@@ -4,6 +4,7 @@
 
 ### Features
 
+- Docker Container: gestión de contenedores.
 - Changelog.
 
 ### Solved Issues

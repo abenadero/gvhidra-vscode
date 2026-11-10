@@ -2,6 +2,7 @@ export type WebviewIconName =
     | 'book'
     | 'bug'
     | 'check'
+    | 'docker'
     | 'download'
     | 'external-link'
     | 'file'
@@ -20,6 +21,7 @@ const iconPaths: Record<WebviewIconName, string> = {
     book: '<path d="M2.5 2.5h4a2 2 0 0 1 2 2v9a2 2 0 0 0-2-2h-4zM13.5 2.5h-3a2 2 0 0 0-2 2v9a2 2 0 0 1 2-2h3z"/>',
     bug: '<path d="M5 5.5h6v4a3 3 0 0 1-6 0zM6.5 5.5v-1a1.5 1.5 0 0 1 3 0v1M2.5 6.5H5m6 0h2.5M2.5 10H5m6 0h2.5M4 3l1.5 1.5M12 3l-1.5 1.5M8 6v6"/>',
     check: '<path d="m3 8.5 3.2 3.2L13 4.9"/>',
+    docker: '<g fill="currentColor" stroke="none"><path fill-rule="evenodd" d="M.5 8.7h9.4c1.3 0 2.2-.3 2.8-.8-.6-.7-.8-1.6-.5-2.5 1 .3 1.6.9 1.9 1.6.6-.2 1.2-.2 1.9-.1-.4 1.4-1.3 2.2-2.8 2.4-1 3.3-3.3 5-6.6 5C2.9 14.3.7 12.3.5 8.7Zm3.4 1.8a.45.45 0 1 0-.9 0 .45.45 0 0 0 .9 0Z"/><path d="M1 6h2v2H1zm2.6 0h2v2h-2zm2.6 0h2v2h-2zm2.6 0h2v2h-2zm-5.2-2.5h2v2h-2zm2.6 0h2v2h-2zm2.6 0h2v2h-2zM6.2 1h2v2h-2z"/></g>',
     download: '<path d="M8 2v8m-3-3 3 3 3-3M3 13.5h10"/>',
     'external-link': '<path d="M9 3h4v4m0-4L7.5 8.5M7 4H3v9h9V9"/>',
     file: '<path d="M4 1.5h5l3 3V14H4zM9 1.5v3h3"/>',

@@ -2,7 +2,7 @@
 
 GVHidra for VSCode es una extensión de Visual Studio Code ideada para apoyar los desarrollos **gvHidra en entornos de la Generalitat Valenciana (GVA)**. Se asume que se utiliza el entorno **gvhidradev dentro de WSL**, con el proyecto abierto en una ventana de VS Code conectada a esa distribución.
 
-La extensión reúne en un panel herramientas de control de versiones, integración con Codex, corrección de código PHP, configuración de Xdebug 3 y accesos a documentación y servicios del entorno.
+La extensión reúne en un panel herramientas de control de versiones, integración con Codex, corrección de código PHP, configuración de Xdebug 3, control de contenedores Docker y accesos a documentación y servicios del entorno.
 
 ## Entorno de trabajo
 
@@ -11,6 +11,7 @@ La extensión reúne en un panel herramientas de control de versiones, integraci
 - Git o Subversion disponibles en WSL, según el repositorio del proyecto.
 - Para corregir código: PHP y PHP CS Fixer disponibles en el entorno de ejecución de la extensión.
 - Para depurar: Xdebug 3 configurado en el servidor PHP y un adaptador de depuración PHP instalado en VS Code.
+- Para gestionar los contenedores: Docker con el comando `docker compose` disponible en WSL y acceso al servicio de Docker.
 - Para la sección Codex: la extensión OpenAI ChatGPT (`openai.chatgpt`) con su ejecutable de Codex accesible, y acceso al repositorio de plugins de Laberit.
 
 Cada herramienta requiere sus propias dependencias y los permisos de acceso a los repositorios o servicios que se utilicen.
@@ -105,6 +106,17 @@ El directorio del proyecto debe estar bajo `htdocs`. La configuración relaciona
 - **Xdebug every line**: espera una conexión y se detiene al entrar en el programa.
 
 Ambas opciones habilitan el registro de depuración e ignoran los ficheros PHP de `vendor`.
+
+## Docker Container
+
+Controla los contenedores del entorno desde una sección con el icono de la ballena de Docker. Ambas acciones se ejecutan en `~/gvhidra/gvhidradev`, independientemente del proyecto abierto, y muestran el comando y su salida en la terminal de tareas de VS Code.
+
+| Elemento | Funcionalidad |
+| --- | --- |
+| **Levantar Contenedores** | Ejecuta `docker compose up -d`. |
+| **Bajar Contenedores** | Ejecuta `docker compose down`. |
+
+Si el directorio no existe o no se puede iniciar la tarea, se muestra un mensaje de error. Los errores de Docker Compose se muestran en la terminal de la tarea.
 
 ## Documentation
 
