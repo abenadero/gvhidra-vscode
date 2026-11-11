@@ -46,7 +46,7 @@ Las descargas se crean en `~/gvhidra/gvhidradev/htdocs/<nombre-del-proyecto>`. D
 | --- | --- |
 | **URL Repositorio** | Muestra inicialmente la URL de `origin`. Permite elegir otra URL, que se recuerda por proyecto al utilizarla en una acción. |
 | **Clonar desde URL** | Solicita el nombre del nuevo proyecto y sus credenciales Git, descarga la URL en `htdocs` y lo abre cuando termina. |
-| **Crear tag desde URL** | Solicita el nombre, la rama o tag de origen y el comentario; crea un tag anotado y lo publica en la URL indicada. |
+| **Crear tag desde URL** | Solicita el nombre, la rama o tag de origen y el comentario; mantiene visible el último tag mientras se escribe el nuevo nombre, crea un tag anotado y lo publica en la URL indicada. |
 | **Update desde URL** | Actualiza la rama actual desde la misma rama de la URL indicada mediante un avance rápido (`fast-forward`). Se detiene si la actualización requiere una fusión. |
 | **Cambiar rama** | Obtiene la rama solicitada desde la URL indicada. Si ya existe localmente, cambia a ella e intenta actualizarla mediante un avance rápido; si no, la crea desde la referencia descargada. |
 | **Ir a pipeline del proyecto** | Abre en el navegador la página de pipelines de GitLab correspondiente a la URL del repositorio. |
@@ -62,7 +62,7 @@ Cada clonado solicita usuario y contraseña o token, también con un repositorio
 | --- | --- |
 | **URL Repositorio** | Muestra la URL de la copia de trabajo, o la última URL guardada si no puede consultarla. Permite indicar la URL que utilizarán las acciones. |
 | **Checkout de la URL** | Solicita un nombre de proyecto y credenciales, descarga la URL en una carpeta nueva de `htdocs` y la abre al finalizar correctamente. |
-| **Crear tag desde URL** | Solicita un nombre de tag, una URL de destino y un comentario; crea el tag mediante una copia remota de la URL de origen. |
+| **Crear tag desde URL** | Solicita un nombre de tag, una URL de destino y un comentario; mantiene visible el último tag mientras se escribe el nuevo nombre y crea el tag mediante una copia remota de la URL de origen. |
 | **Update desde URL** | Actualiza la copia de trabajo desde la URL indicada mediante `svn switch`, permitiendo cambiar la rama o ruta del repositorio asociada. |
 | **Commit desde URL** | Comprueba que la copia de trabajo corresponde a la URL indicada, solicita un comentario y publica sus cambios mediante `svn commit`. |
 | **Gestionar credenciales del proyecto** | Solicita y guarda el usuario y la contraseña SVN del proyecto identificado por el directorio de trabajo, que debe estar bajo `htdocs`. |

@@ -187,7 +187,12 @@ export class GITHelper {
         const latestTag = await this.readGit(repository.root, [
             'for-each-ref', '--sort=-creatordate', '--count=1', '--format=%(refname:strip=2)', 'refs/tags/'
         ]);
-        const tag = await this.promptRefName('Crear tag desde URL', 'Nombre del tag', 'tags', latestTag);
+        const tag = await this.promptRefName(
+            'Crear tag desde URL',
+            latestTag ? `Nombre del nuevo tag. Último tag: ${latestTag}` : 'Nombre del tag',
+            'tags',
+            latestTag
+        );
         if (!tag) {
             return;
         }

@@ -344,10 +344,11 @@ export class SVNHelper {
             return;
         }
 
+        const latestTag = await this.getLatestTagName(repositoryUrl);
         const tagName = await vscode.window.showInputBox({
             title: 'Create SVN TAG',
-            prompt: 'Enter the tag name',
-            placeHolder: await this.getLatestTagName(repositoryUrl),
+            prompt: latestTag ? `Nombre del nuevo tag. Último tag: ${latestTag}` : 'Nombre del tag',
+            placeHolder: latestTag,
             ignoreFocusOut: true,
             validateInput: value => {
                 if (!value.trim()) {

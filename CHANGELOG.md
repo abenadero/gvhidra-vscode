@@ -4,6 +4,7 @@
 
 ### Features
 
+- Git y SVN: último tag visible al escribir uno nuevo.
 - Utils: vaciado de logs PHP.
 - Utils: botones de logs agrupados y Zone.Identifier al final.
 
