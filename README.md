@@ -124,11 +124,15 @@ Utilidades que actúan sobre `~/gvhidra` del usuario de WSL, independientemente 
 
 | Elemento | Funcionalidad |
 | --- | --- |
-| **Delete zone identifiers** | Elimina todos los ficheros cuyo nombre termina en `:Zone.Identifier` de `~/gvhidra` y sus subdirectorios, incluidos los ocultos. No sigue enlaces simbólicos. Muestra el número de ficheros eliminados e informa de los errores si no puede completar el borrado. |
 | **Open PHP 7.4 error log** | Abre `~/gvhidra/gvhidradev/logs/php74/error.log` en una pestaña del editor de VS Code. |
+| **Limpiar error log php7.4** | Vacía `~/gvhidra/gvhidradev/logs/php74/error.log` sin eliminar el fichero. |
 | **Open PHP 8.4 error log** | Abre `~/gvhidra/gvhidradev/logs/php84/error.log` en una pestaña del editor de VS Code. |
+| **Limpiar error log php8.4** | Vacía `~/gvhidra/gvhidradev/logs/php84/error.log` sin eliminar el fichero. |
+| **Delete zone identifiers** | Elimina todos los ficheros cuyo nombre termina en `:Zone.Identifier` de `~/gvhidra` y sus subdirectorios, incluidos los ocultos. No sigue enlaces simbólicos. Muestra el número de ficheros eliminados e informa de los errores si no puede completar el borrado. |
 
-Si un log no existe o no se puede leer, se muestra un mensaje de error.
+Cada botón de limpieza aparece a la derecha del botón de apertura de su versión de PHP. El borrado de Zone.Identifier ocupa la última fila.
+
+Si un log no existe o no se puede abrir o vaciar, se muestra un mensaje de error.
 
 ## Documentation
 
@@ -147,7 +151,7 @@ Las direcciones de **Manual** y **Wiki** se pueden ajustar en la configuración 
 
 ## Desarrollo y empaquetado
 
-Las novedades de la versión `0.0.2` se registran en [CHANGELOG.md](CHANGELOG.md).
+Las novedades de la versión `0.0.3`, actualmente en desarrollo, se registran en [CHANGELOG.md](CHANGELOG.md).
 
 Para compilar y empaquetar la extensión se necesita Node.js 22 o posterior y npm. Las pruebas de control de versiones utilizan `git`, `svn` y `svnadmin`.
 
@@ -158,12 +162,12 @@ npm run package:ls
 npm run package
 ```
 
-`package:ls` permite revisar los archivos que se incluirán. `package` limpia la compilación anterior, compila automáticamente la extensión y genera `gvhidra-vscode-0.0.2.vsix` en la raíz del repositorio. El paquete incluye el código compilado, los iconos, este README, el changelog y la licencia; excluye las fuentes TypeScript, las pruebas y las dependencias de desarrollo. La extensión no utiliza dependencias de ejecución de npm, por lo que el empaquetado omite su búsqueda.
+`package:ls` permite revisar los archivos que se incluirán. `package` limpia la compilación anterior, compila automáticamente la extensión y genera `gvhidra-vscode-0.0.3.vsix` en la raíz del repositorio. El paquete incluye el código compilado, los iconos, este README, el changelog y la licencia; excluye las fuentes TypeScript, las pruebas y las dependencias de desarrollo. La extensión no utiliza dependencias de ejecución de npm, por lo que el empaquetado omite su búsqueda.
 
 El VSIX se puede instalar desde **Extensions: Install from VSIX...** o con:
 
 ```bash
-code --install-extension ./gvhidra-vscode-0.0.2.vsix
+code --install-extension ./gvhidra-vscode-0.0.3.vsix
 ```
 
 ## Licencia

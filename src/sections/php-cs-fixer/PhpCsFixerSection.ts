@@ -295,7 +295,7 @@ export class PhpCsFixerSection extends WebviewSection {
 }
 
 /**
- * Muestra un mensaje informativo en una pseudoterminal dedicada.
+ * Muestra un mensaje informativo en una pseudoterminal que se cierra al pulsar una tecla.
  *
  * @param message Texto que se escribirá en la terminal.
  * @returns No devuelve ningún valor.
@@ -306,11 +306,12 @@ function showTerminalMessage(message: string): void {
         name: 'GVHidra — PHP CS Fixer',
         pty: {
             onDidWrite: writeEmitter.event,
-            open: () => writeEmitter.fire(`${message}\r\n`),
-            close: () => writeEmitter.dispose()
+            open: () => writeEmitter.fire(`${message}\r\n\r\nPulsa cualquier tecla para cerrar esta terminal.\r\n`),
+            close: () => writeEmitter.dispose(),
+            handleInput: () => terminal.dispose()
         }
     });
-    terminal.show(true);
+    terminal.show();
 }
 
 /**

@@ -6,7 +6,7 @@ const path = require('node:path');
 const { beforeEach, test } = require('node:test');
 
 let testHome, errors, information, opened, shown, progress, progressGate;
-let failedReadPath, failedDeletePath;
+let failedReadPath, failedDeletePath, failedTruncatePath;
 const vscode = {
     Uri: { file: fsPath => ({ fsPath, scheme: 'file' }) },
     ProgressLocation: { Notification: 15 },
@@ -41,6 +41,10 @@ Module._load = function (name, ...args) {
         unlink: async file => {
             if (file === failedDeletePath) throw new Error(`EACCES: ${file}`);
             return fs.unlink(file);
+        },
+        truncate: async (file, length) => {
+            if (file === failedTruncatePath) throw new Error(`EACCES: ${file}`);
+            return fs.truncate(file, length);
         }
     };
     return originalLoad.call(this, name, ...args);
@@ -61,6 +65,7 @@ beforeEach(async t => {
     progressGate = undefined;
     failedReadPath = undefined;
     failedDeletePath = undefined;
+    failedTruncatePath = undefined;
 });
 
 async function write(relative, text = 'test content') {
@@ -189,11 +194,69 @@ test('missing PHP logs report their paths without opening or creating files', as
     assert.equal(information.length, 0);
 });
 
+test('clears each PHP error log in place and allows an existing writer to keep logging', async () => {
+    const section = new UtilsSection();
+    const php74 = await write('gvhidra/gvhidradev/logs/php74/error.log', 'PHP 7.4 error');
+    const php84 = await write('gvhidra/gvhidradev/logs/php84/error.log', 'PHP 8.4 error');
+    const other = await write('gvhidra/gvhidradev/logs/php84/other.log', 'Other log');
+
+    for (const [version, file] of [['74', php74], ['84', php84]]) {
+        await fs.chmod(file, 0o640);
+        const before = await fs.stat(file);
+        const writer = await fs.open(file, 'a');
+        try {
+            assert.equal(await section.handleAction(`clearPhp${version}ErrorLog`), true);
+            assert.equal(await fs.readFile(file, 'utf8'), '');
+            const after = await fs.stat(file);
+            assert.equal(after.ino, before.ino);
+            assert.equal(after.mode, before.mode);
+
+            await writer.writeFile('New PHP error\n');
+            assert.equal(await fs.readFile(file, 'utf8'), 'New PHP error\n');
+            assert.ok(information.at(-1).includes(file));
+        } finally {
+            await writer.close();
+        }
+        if (version === '74') assert.equal(await fs.readFile(php84, 'utf8'), 'PHP 8.4 error');
+    }
+    assert.equal(await fs.readFile(other, 'utf8'), 'Other log');
+    assert.equal(information.length, 2);
+    assert.equal(errors.length, 0);
+    assert.equal(opened.length, 0);
+});
+
+test('clearing a missing PHP log reports an error without creating the file', async () => {
+    const section = new UtilsSection();
+    for (const version of ['74', '84']) {
+        const file = path.join(testHome, 'gvhidra', 'gvhidradev', 'logs', `php${version}`, 'error.log');
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        assert.equal(await section.handleAction(`clearPhp${version}ErrorLog`), true);
+        assert.ok(errors.at(-1).includes(file));
+        await assert.rejects(fs.stat(file), { code: 'ENOENT' });
+    }
+    assert.equal(errors.length, 2);
+    assert.equal(information.length, 0);
+});
+
+test('a failure to clear a PHP log preserves its contents and reports no success', async () => {
+    const file = await write('gvhidra/gvhidradev/logs/php74/error.log', 'Keep this error');
+    failedTruncatePath = file;
+    const section = new UtilsSection();
+
+    await section.handleAction('clearPhp74ErrorLog');
+
+    assert.equal(await fs.readFile(file, 'utf8'), 'Keep this error');
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /No se pudo vaciar .*EACCES/);
+    assert.equal(information.length, 0);
+});
+
 test('unknown actions cannot select arbitrary files or deletion paths', async () => {
     const file = await write('outside/file:Zone.Identifier');
     const section = new UtilsSection();
     assert.equal(await section.handleAction('../../outside'), false);
     assert.equal(await section.handleAction('toString'), false);
+    assert.equal(await section.handleAction('clearPhp../../outsideErrorLog'), false);
     assert.equal(await fs.readFile(file, 'utf8'), 'test content');
     assert.equal(opened.length, 0);
     assert.equal(progress.length, 0);

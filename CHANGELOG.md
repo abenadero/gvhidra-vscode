@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.3 (en desarrollo)
+
+### Features
+
+- Utils: vaciado de logs PHP.
+- Utils: botones de logs agrupados y Zone.Identifier al final.
+
+### Solved Issues
+
+- PHP CS Fixer: cierre del aviso de configuración con cualquier tecla.
+- PHP CS Fixer: configuración válida del espaciado de argumentos con nombre.
+
 ## 0.0.2
 
 ### Features

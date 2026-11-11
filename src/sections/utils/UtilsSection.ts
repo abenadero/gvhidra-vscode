@@ -1,4 +1,4 @@
-import { lstat, readdir, unlink } from 'node:fs/promises';
+import { lstat, readdir, truncate, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
@@ -13,17 +13,29 @@ export class UtilsSection extends WebviewSection {
     /** @returns Marcado HTML de las utilidades del entorno gvhidradev. */
     public render(): string {
         return sectionMarkup('Utils', [
+            `<div class="button-row">${[
+                WebviewControls.setButton(`${this.id}.openPhp74ErrorLog`, 'Open PHP 7.4 error log', {
+                    icon: 'file',
+                    tooltip: 'Abrir ~/gvhidra/gvhidradev/logs/php74/error.log en VS Code'
+                }),
+                WebviewControls.setButton(`${this.id}.clearPhp74ErrorLog`, 'Limpiar error log php7.4', {
+                    icon: 'trash',
+                    tooltip: 'Vaciar ~/gvhidra/gvhidradev/logs/php74/error.log sin eliminar el fichero'
+                })
+            ].join('')}</div>`,
+            `<div class="button-row">${[
+                WebviewControls.setButton(`${this.id}.openPhp84ErrorLog`, 'Open PHP 8.4 error log', {
+                    icon: 'file',
+                    tooltip: 'Abrir ~/gvhidra/gvhidradev/logs/php84/error.log en VS Code'
+                }),
+                WebviewControls.setButton(`${this.id}.clearPhp84ErrorLog`, 'Limpiar error log php8.4', {
+                    icon: 'trash',
+                    tooltip: 'Vaciar ~/gvhidra/gvhidradev/logs/php84/error.log sin eliminar el fichero'
+                })
+            ].join('')}</div>`,
             WebviewControls.setButton(`${this.id}.deleteZoneIdentifiers`, 'Delete zone identifiers', {
                 icon: 'trash',
                 tooltip: 'Eliminar todos los ficheros *:Zone.Identifier de ~/gvhidra y sus subdirectorios'
-            }),
-            WebviewControls.setButton(`${this.id}.openPhp74ErrorLog`, 'Open PHP 7.4 error log', {
-                icon: 'file',
-                tooltip: 'Abrir ~/gvhidra/gvhidradev/logs/php74/error.log en VS Code'
-            }),
-            WebviewControls.setButton(`${this.id}.openPhp84ErrorLog`, 'Open PHP 8.4 error log', {
-                icon: 'file',
-                tooltip: 'Abrir ~/gvhidra/gvhidradev/logs/php84/error.log en VS Code'
             })
         ].join(''), { icon: 'tools' });
     }
@@ -44,6 +56,12 @@ export class UtilsSection extends WebviewSection {
                 return true;
             case 'openPhp84ErrorLog':
                 await this.openPhpErrorLog('php84');
+                return true;
+            case 'clearPhp74ErrorLog':
+                await this.clearPhpErrorLog('php74');
+                return true;
+            case 'clearPhp84ErrorLog':
+                await this.clearPhpErrorLog('php84');
                 return true;
             default:
                 return false;
@@ -103,6 +121,21 @@ export class UtilsSection extends WebviewSection {
             await vscode.window.showTextDocument(document, { preview: false });
         } catch (error) {
             void vscode.window.showErrorMessage(`No se pudo abrir ${log.fsPath}: ${errorMessage(error)}`);
+        }
+    }
+
+    /**
+     * Vacía el log existente conservando el fichero y los descriptores abiertos por PHP.
+     *
+     * @param version Directorio de logs de la versión de PHP solicitada.
+     */
+    private async clearPhpErrorLog(version: 'php74' | 'php84'): Promise<void> {
+        const log = join(homedir(), 'gvhidra', 'gvhidradev', 'logs', version, 'error.log');
+        try {
+            await truncate(log, 0);
+            void vscode.window.showInformationMessage(`Log de errores vaciado: ${log}.`);
+        } catch (error) {
+            void vscode.window.showErrorMessage(`No se pudo vaciar ${log}: ${errorMessage(error)}`);
         }
     }
 }

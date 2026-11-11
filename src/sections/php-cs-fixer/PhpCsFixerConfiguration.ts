@@ -166,7 +166,7 @@ return (new PhpCsFixer\Config())
                 'insteadof',
                 'interface',
                 'match',
-                'named_argument_colon',
+                'named_argument',
                 'namespace',
                 'new',
                 'open_tag_with_echo',

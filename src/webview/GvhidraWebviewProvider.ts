@@ -153,6 +153,7 @@ function getHtml(commonControls: string, sections: string, nonce: string): strin
         .section-chevron { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translate(-1px, -1px); transition: transform 140ms ease; }
         .section:not([open]) .section-chevron { transform: rotate(-45deg); }
         .section-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 10px; border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border, var(--vscode-widget-border, transparent)) 65%, transparent); }
+        .button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-column: 1 / -1; gap: 7px; }
         .input-form { display: flex; flex-direction: column; grid-column: 1 / -1; gap: 7px; margin: 0; }
         .labelled-input { display: flex; flex-direction: column; gap: 4px; }
         .labelled-input label { color: var(--vscode-descriptionForeground); font-size: 11px; }

@@ -4,7 +4,7 @@
   "description": "Apoyo al desarrollo gvHidra en entornos de la GVA con gvhidradev dentro de WSL.",
   "publisher": "abenadero",
   "icon": "assets/icons/logo256px.png",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "MIT",
   "categories": [
     "Formatters",
