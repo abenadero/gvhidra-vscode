@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.3 (en desarrollo)
+## 0.0.3
 
 ### Features
 

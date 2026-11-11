@@ -171,7 +171,7 @@ Las direcciones de **Manual** y **Wiki** se pueden ajustar en la configuración 
 
 ## Desarrollo y empaquetado
 
-Las novedades de la versión `0.0.3`, actualmente en desarrollo, se registran en [CHANGELOG.md](CHANGELOG.md).
+Las novedades y correcciones de la versión `0.0.3` están recogidas en [CHANGELOG.md](CHANGELOG.md).
 
 Para compilar y empaquetar la extensión se necesita Node.js 22 o posterior y npm. Las pruebas de control de versiones utilizan `git`, `svn` y `svnadmin`.
 
