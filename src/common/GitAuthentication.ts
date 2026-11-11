@@ -33,22 +33,44 @@ export async function promptForGitEnvironment(
         }
     }
     environment.GIT_TERMINAL_PROMPT = '0';
+    environment.GIT_ASKPASS = '';
     environment.GVHIDRA_GIT_USERNAME = username.trim();
     environment.GVHIDRA_GIT_PASSWORD = password;
-    const helperKey = `credential.${repositoryUrl}.helper`;
-    const settings = [
-        // No reutiliza ni guarda estas credenciales en otros helpers.
-        [helperKey, ''],
-        [helperKey, '!f() { if [ "$1" = get ]; then printf \'%s\\n\' "username=$GVHIDRA_GIT_USERNAME" "password=$GVHIDRA_GIT_PASSWORD"; fi; }; f']
-    ];
     let count = Number(environment.GIT_CONFIG_COUNT ?? '0');
-    for (const [key, value] of settings) {
-        environment[`GIT_CONFIG_KEY_${count}`] = key;
-        environment[`GIT_CONFIG_VALUE_${count}`] = value;
-        count++;
+    for (const url of credentialUrls(repositoryUrl)) {
+        const helperKey = `credential.${url}.helper`;
+        const settings = [
+            // No reutiliza ni guarda estas credenciales en otros helpers.
+            [helperKey, ''],
+            [helperKey, '!f() { if [ "$1" = get ]; then printf \'%s\\n\' "username=$GVHIDRA_GIT_USERNAME" "password=$GVHIDRA_GIT_PASSWORD"; fi; }; f']
+        ];
+        for (const [key, value] of settings) {
+            environment[`GIT_CONFIG_KEY_${count}`] = key;
+            environment[`GIT_CONFIG_VALUE_${count}`] = value;
+            count++;
+        }
     }
     environment.GIT_CONFIG_COUNT = String(count);
     return environment;
+}
+
+/** GitLab puede redirigir la URL elegida a la misma ruta con el sufijo .git. */
+function credentialUrls(repositoryUrl: string): string[] {
+    const urls = new Set([repositoryUrl]);
+    try {
+        const url = new URL(repositoryUrl);
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+            url.pathname = url.pathname.replace(/\/+$/, '');
+            urls.add(url.toString());
+            url.pathname = url.pathname.endsWith('.git')
+                ? url.pathname.slice(0, -4)
+                : `${url.pathname}.git`;
+            urls.add(url.toString());
+        }
+    } catch {
+        // Las rutas locales y las URLs SCP conservan su representación original.
+    }
+    return [...urls];
 }
 
 /** Evita valores vacíos y saltos de línea en el protocolo de credenciales de Git. */

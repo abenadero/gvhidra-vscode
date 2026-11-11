@@ -431,17 +431,32 @@ test('a plain folder shows an empty URL and both download buttons, allowing a Gi
     assert.equal(context.workspaceState.get(`gvhidra.gitRepository.${fileUri(empty).toString()}`), f.selected);
 });
 
-test('every HTTP clone prompts and uses the new credentials with or without an active repository', async t => {
+test('every HTTP clone authenticates direct and redirected GitLab URLs despite a stale VS Code askpass', async t => {
     const f = await fixture(t);
     await git(f.selected, 'update-server-info');
     const empty = path.join(f.root, 'empty');
     await mkdir(empty);
     // Existing credential helpers must not override the values entered for the new project.
     await git(f.root, 'config', '--file', process.env.GIT_CONFIG_GLOBAL, 'credential.helper',
-        '!f() { printf "%s\\n" username=saved-user password=saved-token; }; f');
+        '!f() { if [ "$GVHIDRA_TEST_CACHED_CREDENTIALS" = 1 ]; then printf "%s\\n" username=saved-user password=saved-token; fi; }; f');
     const savedConfig = await readFile(process.env.GIT_CONFIG_GLOBAL, 'utf8');
+    const askpass = path.join(testHome, 'stale-vscode-askpass.sh');
+    const askpassLog = path.join(testHome, 'askpass.log');
+    await writeFile(askpass, '#!/bin/sh\nprintf "called\\n" >> "$GVHIDRA_TEST_ASKPASS_LOG"\nprintf "Missing or invalid credentials. connect ENOENT /run/user/1000/vscode-git-stale.sock\\n" >&2\nexit 1\n', { mode: 0o700 });
+    let useSavedCredentials = false;
+    // VS Code can inject its askpass into the task terminal after the extension builds its environment.
+    taskHost.beforeRun = execution => Object.assign(execution.task.execution.options.env, {
+        GIT_ASKPASS: askpass,
+        GVHIDRA_TEST_ASKPASS_LOG: askpassLog,
+        GVHIDRA_TEST_CACHED_CREDENTIALS: useSavedCredentials ? '1' : '0'
+    });
     let authorization, authenticated;
     const server = http.createServer(async (request, response) => {
+        if (request.url.startsWith('/project/')) {
+            response.writeHead(301, { Location: request.url.replace('/project/', '/project.git/') });
+            response.end();
+            return;
+        }
         if (request.headers.authorization !== authorization) {
             response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="GitLab"' });
             response.end();
@@ -463,19 +478,22 @@ test('every HTTP clone prompts and uses the new credentials with or without an a
         server.listen(0, '127.0.0.1', resolve);
     });
     t.after(() => new Promise(resolve => server.close(resolve)));
-    const url = `http://127.0.0.1:${server.address().port}/project.git`;
-    for (const active of [false, true]) {
+    const canonicalUrl = `http://127.0.0.1:${server.address().port}/project.git`;
+    const urls = [canonicalUrl, canonicalUrl + '/', canonicalUrl.replace(/\.git$/, ''), canonicalUrl.replace(/\.git$/, '/')];
+    const scenarios = urls.flatMap((url, index) => [false, true].map(active => ({ url, index, active })));
+    for (const { url, index, active } of scenarios) {
         vscode.workspace.workspaceFolders = [{ uri: fileUri(active ? f.local : empty) }];
         const context = makeContext();
         const section = new VersionControlSection(context, () => {});
         assert.match(await section.render(), active ? /Git active/ : /Not detected/);
         // Clone the same URL again to ensure no cached credentials bypass the prompts.
         for (const attempt of [1, 2]) {
-            const name = `authenticated-${active}-${attempt}`;
+            const name = `authenticated-${index}-${active}-${attempt}`;
             const username = `clone-user-${attempt}`;
             const password = `token's \" $(touch NEVER_EXECUTED)\`literal\`=$value-${attempt}`;
             authorization = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
             authenticated = 0;
+            useSavedCredentials = attempt === 2;
             inputs = [];
             answers = [name, ` ${username} `, password];
             assert.equal(await section.handleAction('git.clone', url), true);
@@ -496,6 +514,16 @@ test('every HTTP clone prompts and uses the new credentials with or without an a
         }
     }
     assert.deepEqual(errors, []);
+    const openedBeforeFailure = openedFolders.length;
+    inputs = [];
+    answers = ['invalid-token-project', 'clone-user', 'invalid-token'];
+    await helperAt(f.local).handleAction('clone', urls[2]);
+    assert.notEqual(taskHost.results.at(-1).exitCode, 0);
+    assert.match(taskHost.results.at(-1).error.stderr, /Authentication failed/);
+    assert.doesNotMatch(taskHost.results.at(-1).error.stderr, /ENOENT|Missing or invalid credentials/);
+    assert.equal(openedFolders.length, openedBeforeFailure);
+    assert.equal(inputs.length, 3);
+    await assert.rejects(stat(askpassLog), { code: 'ENOENT' });
     assert.equal(process.env.GVHIDRA_GIT_PASSWORD, undefined);
     assert.equal(await readFile(process.env.GIT_CONFIG_GLOBAL, 'utf8'), savedConfig);
 });

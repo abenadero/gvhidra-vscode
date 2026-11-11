@@ -192,11 +192,25 @@ test('temporary credentials authenticate a real HTTP Git request and remain scop
     await exec('git', ['ls-remote', url], { env: environment, cwd: sandbox, timeout: 10000 });
     assert.ok(authenticated > 0);
 
-    const pending = exec('git', ['credential', 'fill'], { env: environment, cwd: sandbox, timeout: 10000 });
-    pending.child.stdin.end(`url=${url.replace('/marketplace.git', '/other.git')}\n\n`);
-    await assert.rejects(pending, error => {
-        assert.match(error.stderr, /could not read Username/);
-        assert.ok(!error.stderr.includes(password));
-        return true;
-    });
+    for (const variant of [url, url + '/', url.replace(/\.git$/, ''), url.replace(/\.git$/, '/')]) {
+        const pending = exec('git', ['credential', 'fill'], { env: environment, cwd: sandbox, timeout: 10000 });
+        pending.child.stdin.end(`url=${variant}\n\n`);
+        const { stdout } = await pending;
+        assert.ok(stdout.includes(`username=${username}\n`));
+        assert.ok(stdout.includes(`password=${password}\n`));
+    }
+    for (const other of [
+        url.replace('/marketplace.git', '/other.git'),
+        url.replace('/marketplace.git', '/marketplace-other.git'),
+        url.replace('127.0.0.1', 'localhost'),
+        url.replace('http:', 'https:')
+    ]) {
+        const pending = exec('git', ['credential', 'fill'], { env: environment, cwd: sandbox, timeout: 10000 });
+        pending.child.stdin.end(`url=${other}\n\n`);
+        await assert.rejects(pending, error => {
+            assert.match(error.stderr, /could not read Username/);
+            assert.ok(!error.stderr.includes(password));
+            return true;
+        });
+    }
 });

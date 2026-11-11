@@ -54,7 +54,7 @@ Las descargas se crean en `~/gvhidra/gvhidradev/htdocs/<nombre-del-proyecto>`. D
 
 Las operaciones de descarga y los comandos Git muestran su ejecución en terminales de VS Code.
 
-Cada clonado solicita usuario y contraseña o token, también con un repositorio activo. Para HTTP(S), las credenciales se utilizan solo durante ese clonado, sin guardarlas en la URL ni en la configuración Git.
+Cada clonado solicita usuario y contraseña o token, también con un repositorio activo. Para HTTP(S), las credenciales se utilizan solo durante ese clonado, sin guardarlas en la URL ni en la configuración Git. Se conservan si GitLab redirige entre la URL con `.git` y la URL sin ese sufijo.
 
 ### Proyecto SVN
 
