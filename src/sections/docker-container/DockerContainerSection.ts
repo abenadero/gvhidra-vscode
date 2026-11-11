@@ -16,7 +16,7 @@ export class DockerContainerSection extends WebviewSection {
                 icon: 'play',
                 tooltip: 'Ejecutar docker compose up -d en ~/gvhidra/gvhidradev'
             }),
-            WebviewControls.setButton(`${this.id}.down`, 'Bajar Contenedores', {
+            WebviewControls.setButton(`${this.id}.down`, 'Tumbar Contenedores', {
                 icon: 'trash',
                 tooltip: 'Ejecutar docker compose down en ~/gvhidra/gvhidradev'
             })

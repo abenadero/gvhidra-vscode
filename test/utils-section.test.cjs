@@ -114,6 +114,28 @@ test('deletes matching files recursively, including hidden directories, and pres
     assert.match(information[1], /No se encontraron ficheros/);
 });
 
+test('skips every templates_c subtree, including unreadable directories, while cleaning similarly named directories', async () => {
+    const ignored = await Promise.all([
+        write('gvhidra/templates_c/file:Zone.Identifier'),
+        write('gvhidra/project/templates_c/nested/file:Zone.Identifier'),
+        write('gvhidra/.hidden/project/templates_c/file:Zone.Identifier')
+    ]);
+    failedReadPath = path.dirname(ignored[0]);
+    const removed = await Promise.all([
+        write('gvhidra/project/file:Zone.Identifier'),
+        write('gvhidra/templates_c_backup/file:Zone.Identifier'),
+        write('gvhidra/project/my_templates_c/file:Zone.Identifier')
+    ]);
+
+    await new UtilsSection().handleAction('deleteZoneIdentifiers');
+
+    for (const file of ignored) assert.equal(await fs.readFile(file, 'utf8'), 'test content');
+    for (const file of removed) await assert.rejects(fs.stat(file), { code: 'ENOENT' });
+    assert.equal(errors.length, 0);
+    assert.equal(information.length, 1);
+    assert.match(information[0], /Eliminados 3 ficheros/);
+});
+
 test('reports a missing root and releases the guard so the action can be retried', async () => {
     await fs.rmdir(path.join(testHome, 'gvhidra'));
     const section = new UtilsSection();

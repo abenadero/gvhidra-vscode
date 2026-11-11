@@ -5,6 +5,11 @@ import * as vscode from 'vscode';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { sectionMarkup, WebviewSection } from '../WebviewSection';
 
+/** Carpetas ignoradas al borrar Zone.Identifier, con todo su contenido y a cualquier profundidad. */
+const ZONE_IDENTIFIER_IGNORED_DIRECTORIES = new Set([
+    'templates_c'
+]);
+
 export class UtilsSection extends WebviewSection {
     public readonly id = 'utils';
 
@@ -14,28 +19,28 @@ export class UtilsSection extends WebviewSection {
     public render(): string {
         return sectionMarkup('Utils', [
             `<div class="button-row">${[
-                WebviewControls.setButton(`${this.id}.openPhp74ErrorLog`, 'Open PHP 7.4 error log', {
+                WebviewControls.setButton(`${this.id}.openPhp74ErrorLog`, 'Abrir log de errores PHP 7.4', {
                     icon: 'file',
                     tooltip: 'Abrir ~/gvhidra/gvhidradev/logs/php74/error.log en VS Code'
                 }),
-                WebviewControls.setButton(`${this.id}.clearPhp74ErrorLog`, 'Limpiar error log php7.4', {
+                WebviewControls.setButton(`${this.id}.clearPhp74ErrorLog`, 'Limpiar log de errores PHP 7.4', {
                     icon: 'trash',
                     tooltip: 'Vaciar ~/gvhidra/gvhidradev/logs/php74/error.log sin eliminar el fichero'
                 })
             ].join('')}</div>`,
             `<div class="button-row">${[
-                WebviewControls.setButton(`${this.id}.openPhp84ErrorLog`, 'Open PHP 8.4 error log', {
+                WebviewControls.setButton(`${this.id}.openPhp84ErrorLog`, 'Abrir log de errores PHP 8.4', {
                     icon: 'file',
                     tooltip: 'Abrir ~/gvhidra/gvhidradev/logs/php84/error.log en VS Code'
                 }),
-                WebviewControls.setButton(`${this.id}.clearPhp84ErrorLog`, 'Limpiar error log php8.4', {
+                WebviewControls.setButton(`${this.id}.clearPhp84ErrorLog`, 'Limpiar log de errores PHP 8.4', {
                     icon: 'trash',
                     tooltip: 'Vaciar ~/gvhidra/gvhidradev/logs/php84/error.log sin eliminar el fichero'
                 })
             ].join('')}</div>`,
             WebviewControls.setButton(`${this.id}.deleteZoneIdentifiers`, 'Delete zone identifiers', {
                 icon: 'trash',
-                tooltip: 'Eliminar todos los ficheros *:Zone.Identifier de ~/gvhidra y sus subdirectorios'
+                tooltip: 'Eliminar ficheros *:Zone.Identifier de ~/gvhidra y sus subdirectorios, salvo las carpetas ignoradas'
             })
         ].join(''), { icon: 'tools' });
     }
@@ -147,7 +152,8 @@ interface CleanupResult {
 }
 
 /**
- * Recorre todos los subdirectorios, incluidos los ocultos, sin seguir enlaces simbólicos.
+ * Recorre los subdirectorios, incluidos los ocultos, omitiendo las carpetas ignoradas
+ * y sin seguir enlaces simbólicos.
  * Solo elimina ficheros con el sufijo exacto y continúa si una operación falla.
  *
  * @param root Directorio raíz del recorrido.
@@ -168,7 +174,9 @@ async function deleteZoneIdentifierFiles(root: string): Promise<CleanupResult> {
             for (const entry of entries) {
                 const path = join(directory, entry.name);
                 if (entry.isDirectory()) {
-                    directories.push(path);
+                    if (!ZONE_IDENTIFIER_IGNORED_DIRECTORIES.has(entry.name)) {
+                        directories.push(path);
+                    }
                 } else if (entry.isFile() && entry.name.endsWith(':Zone.Identifier')) {
                     try {
                         await unlink(path);

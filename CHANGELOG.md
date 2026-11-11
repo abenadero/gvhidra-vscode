@@ -9,6 +9,11 @@
 
 ### Solved Issues
 
+- PHP CS Fixer: exclusión de wscomun, jasper y custom.
+- PHP CS Fixer: mayor tiempo de espera en procesos paralelos.
+- PHP CS Fixer: respeto de las exclusiones al corregir el proyecto.
+- Utils: exclusión de templates_c al borrar Zone.Identifier.
+- Etiquetas de botones unificadas.
 - PHP CS Fixer: cierre del aviso de configuración con cualquier tecla.
 - PHP CS Fixer: configuración válida del espaciado de argumentos con nombre.
 

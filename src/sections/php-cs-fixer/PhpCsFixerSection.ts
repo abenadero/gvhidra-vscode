@@ -120,7 +120,7 @@ export class PhpCsFixerSection extends WebviewSection {
         }
 
         await this.runFixer(
-            this.buildFixArguments(editor.document.uri.fsPath, configuration),
+            this.buildFixArguments(configuration, editor.document.uri.fsPath),
             'Fix selected PHP file',
             root
         );
@@ -145,21 +145,24 @@ export class PhpCsFixerSection extends WebviewSection {
             return;
         }
         await this.runFixer(
-            this.buildFixArguments('.', configuration),
+            this.buildFixArguments(configuration),
             'Fix PHP project',
             root
         );
     }
 
     /**
-     * Construye los argumentos de corrección con configuración explícita y sin interacción.
+     * Construye los argumentos con configuración explícita y sin interacción.
+     * Si no se indica un fichero, el Finder del proyecto decide qué rutas procesar.
+     * Si se indica, se intersecta con el Finder para respetar sus exclusiones.
      *
-     * @param path Fichero o directorio que debe procesar PHP CS Fixer.
      * @param configuration URI del fichero de configuración del proyecto.
+     * @param path Fichero que debe procesar PHP CS Fixer, si se limita la ejecución.
      * @returns Argumentos listos para pasarlos al ejecutable.
      */
-    private buildFixArguments(path: string, configuration: vscode.Uri): string[] {
-        return ['fix', `--config=${configuration.fsPath}`, '--no-interaction', '--', path];
+    private buildFixArguments(configuration: vscode.Uri, path?: string): string[] {
+        const args = ['fix', `--config=${configuration.fsPath}`, '--no-interaction'];
+        return path === undefined ? args : [...args, '--path-mode=intersection', '--', path];
     }
 
     /**

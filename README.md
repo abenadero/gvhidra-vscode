@@ -89,7 +89,19 @@ Permite generar la configuración de estilo y ejecutar PHP CS Fixer sobre el pro
 | **Fix project** | Guarda los documentos abiertos y ejecuta la corrección sobre el proyecto completo, respetando su configuración. |
 | **Crear fichero configuración** | Crea `.php-cs-fixer.php` en el directorio de trabajo si todavía no existe. |
 
-Las acciones de corrección requieren `.php-cs-fixer.php` y muestran la salida en una terminal de tareas. La configuración inicial parte de PSR-12, añade reglas de formato y excluye los directorios `igep`, `templates_c`, `vendor`, `node_modules` y `.git`.
+Las acciones de corrección requieren `.php-cs-fixer.php` y muestran la salida en una terminal de tareas. La configuración inicial parte de PSR-12, añade reglas de formato y excluye los directorios `igep`, `templates_c`, `wscomun`, `jasper`, `custom`, `vendor`, `node_modules` y `.git`, a cualquier profundidad. Ambas acciones respetan estas exclusiones, incluso al seleccionar un fichero dentro de esas carpetas.
+
+Si ya tienes `.php-cs-fixer.php`, incorpora las carpetas que falten a su lista `->exclude([...])`; la extensión conserva las configuraciones existentes.
+
+**Fix project** usa el Finder de la configuración, incluidas sus exclusiones. La plantilla permite hasta 15 minutos por lote de trabajo paralelo; la ejecución completa puede durar más.
+
+Si ya tienes `.php-cs-fixer.php`, añade esta llamada después de `return (new PhpCsFixer\Config())` para ampliar el límite de los procesos paralelos:
+
+```php
+    ->setParallelConfig(PhpCsFixer\Runner\Parallel\ParallelConfigFactory::detect(null, 900))
+```
+
+Si el procesamiento paralelo sigue fallando, puedes ejecutar PHP CS Fixer con `--sequential` desde la terminal. Procesará los ficheros uno a uno, sin el límite por lote de los procesos paralelos, aunque puede tardar más.
 
 ## XDebug3
 
@@ -114,7 +126,7 @@ Controla los contenedores del entorno desde una sección con el icono de la ball
 | Elemento | Funcionalidad |
 | --- | --- |
 | **Levantar Contenedores** | Ejecuta `docker compose up -d`. |
-| **Bajar Contenedores** | Ejecuta `docker compose down`. |
+| **Tumbar Contenedores** | Ejecuta `docker compose down`. |
 
 Si el directorio no existe o no se puede iniciar la tarea, se muestra un mensaje de error. Los errores de Docker Compose se muestran en la terminal de la tarea.
 
@@ -124,15 +136,21 @@ Utilidades que actúan sobre `~/gvhidra` del usuario de WSL, independientemente 
 
 | Elemento | Funcionalidad |
 | --- | --- |
-| **Open PHP 7.4 error log** | Abre `~/gvhidra/gvhidradev/logs/php74/error.log` en una pestaña del editor de VS Code. |
-| **Limpiar error log php7.4** | Vacía `~/gvhidra/gvhidradev/logs/php74/error.log` sin eliminar el fichero. |
-| **Open PHP 8.4 error log** | Abre `~/gvhidra/gvhidradev/logs/php84/error.log` en una pestaña del editor de VS Code. |
-| **Limpiar error log php8.4** | Vacía `~/gvhidra/gvhidradev/logs/php84/error.log` sin eliminar el fichero. |
-| **Delete zone identifiers** | Elimina todos los ficheros cuyo nombre termina en `:Zone.Identifier` de `~/gvhidra` y sus subdirectorios, incluidos los ocultos. No sigue enlaces simbólicos. Muestra el número de ficheros eliminados e informa de los errores si no puede completar el borrado. |
+| **Abrir log de errores PHP 7.4** | Abre `~/gvhidra/gvhidradev/logs/php74/error.log` en una pestaña del editor de VS Code. |
+| **Limpiar log de errores PHP 7.4** | Vacía `~/gvhidra/gvhidradev/logs/php74/error.log` sin eliminar el fichero. |
+| **Abrir log de errores PHP 8.4** | Abre `~/gvhidra/gvhidradev/logs/php84/error.log` en una pestaña del editor de VS Code. |
+| **Limpiar log de errores PHP 8.4** | Vacía `~/gvhidra/gvhidradev/logs/php84/error.log` sin eliminar el fichero. |
+| **Delete zone identifiers** | Elimina los ficheros cuyo nombre termina en `:Zone.Identifier` de `~/gvhidra` y sus subdirectorios, incluidos los ocultos. Omite las carpetas ignoradas y no sigue enlaces simbólicos. Muestra el número de ficheros eliminados e informa de los errores si no puede completar el borrado. |
 
 Cada botón de limpieza aparece a la derecha del botón de apertura de su versión de PHP. El borrado de Zone.Identifier ocupa la última fila.
 
 Si un log no existe o no se puede abrir o vaciar, se muestra un mensaje de error.
+
+### Carpetas ignoradas al borrar Zone.Identifier
+
+Se omiten estas carpetas y todo su contenido a cualquier profundidad dentro de `~/gvhidra`:
+
+- `templates_c`
 
 ## Documentation
 

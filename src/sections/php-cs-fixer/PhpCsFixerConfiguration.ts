@@ -10,6 +10,9 @@ $finder = PhpCsFixer\Finder::create()
     ->exclude([
         'igep',
         'templates_c',
+        'wscomun',
+        'jasper',
+        'custom',
         'vendor',
         'node_modules',
         '.git',
@@ -19,6 +22,8 @@ $finder = PhpCsFixer\Finder::create()
     ->ignoreVCS(true);
 
 return (new PhpCsFixer\Config())
+    // Hasta 15 minutos por lote, con detección automática del número de procesos.
+    ->setParallelConfig(PhpCsFixer\Runner\Parallel\ParallelConfigFactory::detect(null, 900))
     ->setRiskyAllowed(false)
     ->setUsingCache(true)
     ->setRules([
