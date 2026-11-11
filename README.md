@@ -36,7 +36,7 @@ Detecta si el proyecto utiliza Git o SVN y muestra los controles correspondiente
 | --- | --- |
 | **URL Repositorio** | Permite introducir la URL del proyecto que se quiere descargar. |
 | **SVN checkout** | Solicita el nombre del nuevo proyecto y sus credenciales SVN, descarga la URL indicada y abre la carpeta al finalizar correctamente. |
-| **GIT clone** | Solicita el nombre del nuevo proyecto, clona la URL indicada y abre la carpeta al finalizar correctamente. |
+| **GIT clone** | Solicita el nombre del nuevo proyecto y sus credenciales Git, clona la URL indicada y abre la carpeta al finalizar correctamente. |
 
 Las descargas se crean en `~/gvhidra/gvhidradev/htdocs/<nombre-del-proyecto>`. Debe haber una carpeta abierta en VS Code para iniciar la operación; el destino es una carpeta nueva y el nombre solicitado no puede corresponder a una carpeta existente.
 
@@ -45,7 +45,7 @@ Las descargas se crean en `~/gvhidra/gvhidradev/htdocs/<nombre-del-proyecto>`. D
 | Elemento | Funcionalidad |
 | --- | --- |
 | **URL Repositorio** | Muestra inicialmente la URL de `origin`. Permite elegir otra URL, que se recuerda por proyecto al utilizarla en una acción. |
-| **Clonar desde URL** | Descarga la URL en un nuevo proyecto de `htdocs` y lo abre cuando termina. |
+| **Clonar desde URL** | Solicita el nombre del nuevo proyecto y sus credenciales Git, descarga la URL en `htdocs` y lo abre cuando termina. |
 | **Crear tag desde URL** | Solicita el nombre, la rama o tag de origen y el comentario; crea un tag anotado y lo publica en la URL indicada. |
 | **Update desde URL** | Actualiza la rama actual desde la misma rama de la URL indicada mediante un avance rápido (`fast-forward`). Se detiene si la actualización requiere una fusión. |
 | **Cambiar rama** | Obtiene la rama solicitada desde la URL indicada. Si ya existe localmente, cambia a ella e intenta actualizarla mediante un avance rápido; si no, la crea desde la referencia descargada. |
@@ -53,6 +53,8 @@ Las descargas se crean en `~/gvhidra/gvhidradev/htdocs/<nombre-del-proyecto>`. D
 | **Abrir Source Control** | Abre la vista de control de código fuente de VS Code. |
 
 Las operaciones de descarga y los comandos Git muestran su ejecución en terminales de VS Code.
+
+Cada clonado solicita usuario y contraseña o token, también con un repositorio activo. Para HTTP(S), las credenciales se utilizan solo durante ese clonado, sin guardarlas en la URL ni en la configuración Git.
 
 ### Proyecto SVN
 
@@ -68,7 +70,7 @@ Las operaciones de descarga y los comandos Git muestran su ejecución en termina
 | **Mostrar historial del fichero activo** | Muestra en una terminal el historial SVN del fichero abierto, siempre que pertenezca a la copia de trabajo detectada. |
 | **Abrir Source Control** | Abre la vista de control de código fuente de VS Code. |
 
-Las credenciales del proyecto se guardan en `~/.subversion/auth/<ruta-del-proyecto-bajo-htdocs>/svn-credentials`, sin cifrar y con permisos de lectura y escritura para el propietario (`0600`). Las acciones SVN las reutilizan; si no están disponibles, los comandos de actualización, commit, creación de tags e historial permiten introducirlas en la terminal.
+Las credenciales del proyecto se guardan en `~/.subversion/auth/<ruta-del-proyecto-bajo-htdocs>/svn-credentials`, sin cifrar y con permisos de lectura y escritura para el propietario (`0600`). Cada checkout solicita las credenciales del nuevo proyecto, aunque haya un repositorio activo o credenciales guardadas. Las demás acciones SVN las reutilizan; si no están disponibles, los comandos de actualización, commit, creación de tags e historial permiten introducirlas en la terminal.
 
 ## Codex
 

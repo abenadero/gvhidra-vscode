@@ -2,9 +2,10 @@ import { execFile } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
+import { promptForGitEnvironment } from '../../common/GitAuthentication';
 import { WebviewControls } from '../../webview/components/WebviewControls';
 import { escapeHtml } from '../WebviewSection';
-import { createProjectDirectory, runProjectCheckout } from './ProjectCheckout';
+import { createProjectDirectory, discardEmptyProjectDirectory, runProjectCheckout } from './ProjectCheckout';
 
 const execFileAsync = promisify(execFile);
 
@@ -143,11 +144,21 @@ export class GITHelper {
             return;
         }
         const destination = await createProjectDirectory('Clonar desde URL');
-        if (destination) {
-            await runProjectCheckout(
-                'git', ['clone', '--', repository.url, destination.fsPath], destination, 'Clonar proyecto'
-            );
+        if (!destination) {
+            return;
         }
+        const environment = await promptForGitEnvironment(repository.url, {
+            title: 'Credenciales Git del proyecto',
+            username: 'Usuario de Git',
+            password: 'Contraseña o token de acceso personal con permiso de lectura del repositorio'
+        });
+        if (!environment) {
+            await discardEmptyProjectDirectory(destination);
+            return;
+        }
+        await runProjectCheckout(
+            'git', ['clone', '--', repository.url, destination.fsPath], destination, 'Clonar proyecto', environment
+        );
     }
 
     /** Actualiza la rama actual desde esa misma rama en la URL, sin crear merges. */

@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { execFile } = require('node:child_process');
 const { mkdtemp, mkdir, readFile, rm, stat, writeFile } = require('node:fs/promises');
+const http = require('node:http');
 const Module = require('node:module');
 const os = require('node:os');
 const { tmpdir } = os;
@@ -57,6 +58,25 @@ beforeEach(async t => {
     testHome = await mkdtemp(path.join(tmpdir(), 'gvhidra-git-home-'));
     const directory = testHome;
     t.after(() => rm(directory, { recursive: true, force: true }));
+    const config = path.join(testHome, 'gitconfig');
+    await writeFile(config, '[credential]\n\thelper =\n');
+    const isolatedEnvironment = {
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_GLOBAL: config,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'credential.interactive',
+        GIT_CONFIG_VALUE_0: 'false',
+        GIT_ASKPASS: '',
+        SSH_ASKPASS: ''
+    };
+    const previous = Object.fromEntries(Object.keys(isolatedEnvironment).map(key => [key, process.env[key]]));
+    Object.assign(process.env, isolatedEnvironment);
+    t.after(() => {
+        for (const [key, value] of Object.entries(previous)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
+    });
     terminals = [];
     warnings = [];
     errors = [];
@@ -148,7 +168,7 @@ test('clone downloads into the named project under HOME/gvhidra/gvhidradev/htdoc
     const f = await fixture(t);
     const name = "Proyecto de prueba's";
     const clone = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name);
-    answers = [` ${name} `];
+    answers = [` ${name} `, 'demo-user', 'demo-token'];
     await helperAt(f.local).handleAction('clone', f.selected);
     assert.equal(taskHost.results[0].exitCode, 0, taskHost.results[0].error?.message);
     assert.equal(await git(clone, 'rev-parse', 'HEAD'), f.remoteHead);
@@ -176,7 +196,7 @@ test('clone rejects invalid project names and preserves an existing project fold
 });
 
 test('a failed clone never opens the folder and removes the empty reserved destination', async () => {
-    answers = ['failed-project'];
+    answers = ['failed-project', 'demo-user', 'demo-token'];
     await helperAt(testHome).handleAction('clone', path.join(testHome, 'missing.git'));
     assert.notEqual(taskHost.results[0].exitCode, 0);
     assert.equal(openedFolders.length, 0);
@@ -188,13 +208,13 @@ test('a failed clone never opens the folder and removes the empty reserved desti
 test('task startup failures and cancellation before process start do not open a project', async () => {
     const helper = helperAt(testHome);
     taskHost.startError = new Error('Unable to start task');
-    answers = ['not-started'];
+    answers = ['not-started', 'demo-user', 'demo-token'];
     await helper.handleAction('clone', '/unused.git');
     assert.match(errors.at(-1), /No se pudo iniciar/);
     assert.equal(taskHost.listenerCount, 0);
     taskHost.startError = undefined;
     taskHost.endWithoutProcess = true;
-    answers = ['cancelled-project'];
+    answers = ['cancelled-project', 'demo-user', 'demo-token'];
     await helper.handleAction('clone', '/unused.git');
     assert.equal(openedFolders.length, 0);
     assert.equal(taskHost.listenerCount, 0);
@@ -209,7 +229,7 @@ test('clone waits for its own successful task completion before opening the fold
     const start = new Promise(resolve => { started = resolve; });
     const pending = new Promise(resolve => { release = resolve; });
     taskHost.beforeRun = async () => { started(); await pending; };
-    answers = ['wait-for-clone'];
+    answers = ['wait-for-clone', 'demo-user', 'demo-token'];
     const download = helperAt(f.local).handleAction('clone', f.selected);
     await start;
     const openedBeforeCompletion = openedFolders.length;
@@ -403,12 +423,97 @@ test('a plain folder shows an empty URL and both download buttons, allowing a Gi
         assert.equal(await section.handleAction(action, ' '), true);
     }
     assert.equal(taskHost.runs.length, 0);
-    answers = ['clone-from-plain-folder'];
+    answers = ['clone-from-plain-folder', 'demo-user', 'demo-token'];
     assert.equal(await section.handleAction('git.clone', f.selected), true);
     const clone = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', 'clone-from-plain-folder');
     assert.equal(await git(clone, 'rev-parse', 'HEAD'), f.remoteHead);
     assert.deepEqual(openedFolders.map(uri => uri.fsPath), [clone]);
     assert.equal(context.workspaceState.get(`gvhidra.gitRepository.${fileUri(empty).toString()}`), f.selected);
+});
+
+test('every HTTP clone prompts and uses the new credentials with or without an active repository', async t => {
+    const f = await fixture(t);
+    await git(f.selected, 'update-server-info');
+    const empty = path.join(f.root, 'empty');
+    await mkdir(empty);
+    // Existing credential helpers must not override the values entered for the new project.
+    await git(f.root, 'config', '--file', process.env.GIT_CONFIG_GLOBAL, 'credential.helper',
+        '!f() { printf "%s\\n" username=saved-user password=saved-token; }; f');
+    const savedConfig = await readFile(process.env.GIT_CONFIG_GLOBAL, 'utf8');
+    let authorization, authenticated;
+    const server = http.createServer(async (request, response) => {
+        if (request.headers.authorization !== authorization) {
+            response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="GitLab"' });
+            response.end();
+            return;
+        }
+        authenticated++;
+        try {
+            const relativePath = new URL(request.url, 'http://localhost').pathname.slice('/project.git/'.length);
+            const content = await readFile(path.join(f.selected, relativePath));
+            response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+            response.end(content);
+        } catch {
+            response.writeHead(404);
+            response.end();
+        }
+    });
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+    });
+    t.after(() => new Promise(resolve => server.close(resolve)));
+    const url = `http://127.0.0.1:${server.address().port}/project.git`;
+    for (const active of [false, true]) {
+        vscode.workspace.workspaceFolders = [{ uri: fileUri(active ? f.local : empty) }];
+        const context = makeContext();
+        const section = new VersionControlSection(context, () => {});
+        assert.match(await section.render(), active ? /Git active/ : /Not detected/);
+        // Clone the same URL again to ensure no cached credentials bypass the prompts.
+        for (const attempt of [1, 2]) {
+            const name = `authenticated-${active}-${attempt}`;
+            const username = `clone-user-${attempt}`;
+            const password = `token's \" $(touch NEVER_EXECUTED)\`literal\`=$value-${attempt}`;
+            authorization = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+            authenticated = 0;
+            inputs = [];
+            answers = [name, ` ${username} `, password];
+            assert.equal(await section.handleAction('git.clone', url), true);
+            assert.equal(taskHost.results.at(-1).exitCode, 0, taskHost.results.at(-1).error?.message);
+            assert.ok(authenticated > 0);
+            assert.equal(inputs.length, 3);
+            assert.equal(inputs[2].password, true);
+            assert.match(inputs[2].prompt, /token/);
+            const destination = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name);
+            assert.equal(await git(destination, 'rev-parse', 'HEAD'), f.remoteHead);
+            assert.equal(await git(destination, 'remote', 'get-url', 'origin'), url);
+            assert.equal(openedFolders.at(-1).fsPath, destination);
+            const task = taskHost.runs.at(-1);
+            assert.ok(!JSON.stringify(task.execution.args).includes(password));
+            assert.ok(!JSON.stringify(task.definition).includes(password));
+            assert.equal(context.workspaceState.get(`gvhidra.gitRepository.${fileUri(active ? f.local : empty).toString()}`), url);
+            await assert.rejects(stat(path.join(destination, 'NEVER_EXECUTED')), { code: 'ENOENT' });
+        }
+    }
+    assert.deepEqual(errors, []);
+    assert.equal(process.env.GVHIDRA_GIT_PASSWORD, undefined);
+    assert.equal(await readFile(process.env.GIT_CONFIG_GLOBAL, 'utf8'), savedConfig);
+});
+
+test('cancelled or invalid clone credentials never start a task and remove the reserved folder', async () => {
+    const responses = [
+        [undefined], ['demo-user', undefined], [' '], ['bad\nuser'],
+        ['demo-user', ''], ['demo-user', 'bad\npassword'], ['demo-user', 'bad\0password']
+    ];
+    for (const [index, credentials] of responses.entries()) {
+        const name = `cancelled-credentials-${index}`;
+        answers = [name, ...credentials];
+        await helperAt(testHome).handleAction('clone', 'https://gitlab.example.com/group/project.git');
+        await assert.rejects(stat(path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name)), { code: 'ENOENT' });
+    }
+    assert.equal(taskHost.runs.length, 0);
+    assert.equal(openedFolders.length, 0);
+    assert.deepEqual(errors, []);
 });
 
 test('an empty .git in an opened child folder never selects the parent repository or URL', async t => {

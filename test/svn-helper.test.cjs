@@ -448,6 +448,40 @@ test('a plain folder can start SVN checkout through the shared URL control', asy
     assert.equal(await svn(f.local, 'info', '--show-item', 'url'), f.trunk);
 });
 
+test('every checkout prompts for new credentials even with an active repository and saved credentials', async () => {
+    const f = await fixture();
+    answers = ['saved-user', 'saved-password'];
+    await helperAt(f.local).handleAction('manageProjectCredentials', f.local);
+    const savedCredentials = await readFile(f.credentialsFile, 'utf8');
+    const section = new VersionControlSection(makeContext(), () => {});
+    assert.match(await section.render(), /SVN active/);
+    for (const attempt of [1, 2]) {
+        const name = `checkout-active-${attempt}`;
+        const username = `new-user-${attempt}`;
+        const password = `new-password-${attempt}`;
+        // A stale file for this destination must also be replaced by the new prompts.
+        const credentialsFile = path.join(testHome, '.subversion', 'auth', name, 'svn-credentials');
+        await mkdir(path.dirname(credentialsFile), { recursive: true });
+        await writeFile(credentialsFile, 'username=stale-user\npassword=stale-password\n');
+        inputs = [];
+        answers = [name, username, password];
+        assert.equal(await section.handleAction('svn.checkout', f.branch), true);
+        assert.equal(taskHost.results.at(-1).exitCode, 0, taskHost.results.at(-1).error?.message);
+        assert.equal(inputs.length, 3);
+        assert.equal(inputs[2].password, true);
+        const args = taskHost.runs.at(-1).execution.args;
+        assert.equal(args[args.indexOf('--username') + 1], username);
+        assert.equal(args[args.indexOf('--password') + 1], password);
+        assert.ok(args.includes('--no-auth-cache'));
+        const destination = path.join(testHome, 'gvhidra', 'gvhidradev', 'htdocs', name);
+        assert.equal(await svn(destination, 'info', '--show-item', 'url'), f.branch);
+        assert.equal(await readFile(credentialsFile, 'utf8'), `username=${username}\npassword=${password}\n`);
+        assert.equal(openedFolders.at(-1).fsPath, destination);
+    }
+    assert.equal(await readFile(f.credentialsFile, 'utf8'), savedCredentials);
+    assert.deepEqual(errors, []);
+});
+
 test('the opened SVN working copy wins over an empty .git and a Git repository two folders above', async () => {
     const f = await fixture();
     const gitParent = path.dirname(path.dirname(f.local));

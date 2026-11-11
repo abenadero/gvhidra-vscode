@@ -51,7 +51,8 @@ export async function runProjectCheckout(
     command: string,
     args: string[],
     directory: vscode.Uri,
-    label: string
+    label: string,
+    environment?: Record<string, string>
 ): Promise<void> {
     const runId = randomUUID();
     const task = new vscode.Task(
@@ -59,7 +60,7 @@ export async function runProjectCheckout(
         vscode.TaskScope.Workspace,
         `${label}: ${basename(directory.fsPath)}`,
         'GVHidra',
-        new vscode.ProcessExecution(command, args, { cwd: directory.fsPath })
+        new vscode.ProcessExecution(command, args, { cwd: directory.fsPath, env: environment })
     );
     task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, echo: false };
 

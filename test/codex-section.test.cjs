@@ -115,6 +115,7 @@ test('missing credentials prompt for a username and masked token, then retry wit
     assert.deepEqual(errors, []);
     assert.equal(renderCount, 1);
     assert.equal(process.env.GVHIDRA_MARKETPLACE_GIT_PASSWORD, undefined);
+    assert.equal(process.env.GVHIDRA_GIT_PASSWORD, undefined);
     assert.equal(await readFile(config, 'utf8'), before);
     await assert.rejects(stat(path.join(sandbox, 'NEVER_EXECUTED')), { code: 'ENOENT' });
 });

@@ -9,6 +9,7 @@
 
 ### Solved Issues
 
+- Git y SVN: solicitud de credenciales al descargar proyectos con o sin repositorio activo.
 - PHP CS Fixer: exclusión de wscomun, jasper y custom.
 - PHP CS Fixer: mayor tiempo de espera en procesos paralelos.
 - PHP CS Fixer: respeto de las exclusiones al corregir el proyecto.
